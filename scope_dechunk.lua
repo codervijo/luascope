@@ -299,8 +299,8 @@ function Dechunk(chunk_name, chunk)
   -- loads a block of endian-sensitive bytes
   -- * rest of code assumes little-endian by default
   -------------------------------------------------------------
-  local function LoadBlock(size)
-    if not pcall(IsChunkSizeOk, size, idx, result.chunk_size, "LoadBlock") then return end
+  local function LoadBlock(size, chunk, total_size)
+    if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     previdx = idx
     idx = idx + size
     local b = string.sub(chunk, idx - size, idx - 1)
@@ -454,7 +454,7 @@ convert_to["long long"] = convert_to["int"]
     -- loads an integer (signed)
     -------------------------------------------------------------
     local function LoadInt()
-      local x = LoadBlock(GetLuaIntSize())
+      local x = LoadBlock(GetLuaIntSize(), chunk, result.chunk_size)
       if not x then
         error("could not load integer")
       else
@@ -476,7 +476,7 @@ convert_to["long long"] = convert_to["int"]
     -- loads a size_t (assume unsigned)
     -------------------------------------------------------------
     local function LoadSize()
-      local x = LoadBlock(GetLuaSizetSize())
+      local x = LoadBlock(GetLuaSizetSize(), chunk, result.chunk_size)
       if not x then
         --error("could not load size_t") handled in LoadString()
         return
@@ -493,7 +493,7 @@ convert_to["long long"] = convert_to["int"]
     -- loads a number (lua_Number type)
     -------------------------------------------------------------
     local function LoadNumber()
-      local x = LoadBlock(GetLuaNumberSize())
+      local x = LoadBlock(GetLuaNumberSize(), chunk, result.chunk_size)
       if not x then
         error("could not load lua_Number")
       else
@@ -630,7 +630,7 @@ convert_to["long long"] = convert_to["int"]
       func.code = {}
       func.sizecode = size
       for i = 1, size do
-        func.code[i] = LoadBlock(GetLuaInstructionSize())
+        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, result.chunk_size)
       end
     end
 
