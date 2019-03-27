@@ -183,6 +183,89 @@ local function DescCode(chunk, func)
     end
 end
 
+--
+-- displays function information
+-- * decoupled from LoadFunction due to 5.1 chunk rearrangement
+--
+function DescFunction(chunk, func, num, level)
+    DescLine(chunk, "")
+    BriefLine("")
+    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")",
+    func.pos_source)
+    BriefLine("; function ["..num.."] definition (level "..level..")")
+    DescLine(chunk, "** start of function **")
+
+    -- source file name
+    DescString(chunk, func.source, func.pos_source)
+    if func.source == nil then
+        DescLine(chunk, "source name: (none)")
+    else
+        DescLine(chunk, "source name: "..EscapeString(func.source))
+    end
+
+    -- optionally initialize source listing merging
+    SourceInit(func.source)
+
+    -- line where the function was defined
+    local pos = func.pos_linedefined
+    FormatLine(chunk, GetLuaIntSize(), "line defined ("..func.linedefined..")", pos)
+    pos = pos + GetLuaIntSize()
+    FormatLine(chunk, GetLuaIntSize(), "last line defined ("..func.lastlinedefined..")", pos)
+    pos = pos + GetLuaIntSize()
+
+    -- display byte counts
+    FormatLine(chunk, 1, "nups ("..func.nups..")", pos)
+    FormatLine(chunk, 1, "numparams ("..func.numparams..")", pos + 1)
+    FormatLine(chunk, 1, "is_vararg ("..func.is_vararg..")", pos + 2)
+    FormatLine(chunk, 1, "maxstacksize ("..func.maxstacksize..")", pos + 3)
+    BriefLine(string.format("; %d upvalues, %d params, %d stacks",
+    func.nups, func.numparams, func.maxstacksize))
+    BriefLine(string.format(".function%s%d %d %d %d", GetOutputSep(),
+    func.nups, func.numparams, func.is_vararg, func.maxstacksize))
+
+    -- display parts of a chunk
+    if ShouldIPrintParts() then
+        DescLines(chunk,func)       -- brief displays 'declarations' first
+        DescLocals(chunk, func)
+        DescUpvalues(chunk, func)
+        DescConstantKs(chunk, func)
+        DescConstantPs(chunk, func)
+        DescCode(chunk, func)
+    else
+        DescCode(chunk, func)        -- normal displays positional order
+        DescConstantKs(chunk, func)
+        DescConstantPs(chunk, func)
+        DescLines(chunk,func)
+        DescLocals(chunk, func)
+        DescUpvalues(chunk, func)
+    end
+
+    -- show function statistics block
+    DisplayStat("* func header   = "..func.stat.header.." bytes")
+    DisplayStat("* lines size    = "..func.stat.lines.." bytes")
+    DisplayStat("* locals size   = "..func.stat.locals.." bytes")
+    DisplayStat("* upvalues size = "..func.stat.upvalues.." bytes")
+    DisplayStat("* consts size   = "..func.stat.consts.." bytes")
+    DisplayStat("* funcs size    = "..func.stat.funcs.." bytes")
+    DisplayStat("* code size     = "..func.stat.code.." bytes")
+    func.stat.total = func.stat.header + func.stat.lines +
+    func.stat.locals + func.stat.upvalues +
+    func.stat.consts + func.stat.funcs +
+    func.stat.code
+    DisplayStat(chunk, "* TOTAL size    = "..func.stat.total.." bytes")
+    DescLine(chunk, "** end of function **\n")
+    BriefLine("; end of function\n")
+end
+
+--
+-- tests if a given number of bytes is available
+--
+local function IsChunkSizeOk(size, idx, total_size, errmsg)
+    if idx + size - 1 > total_size then
+        error(string.format("chunk too small for %s at offset %d", errmsg, idx - 1))
+    end
+end
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -201,14 +284,7 @@ function Dechunk(chunk_name, chunk)
   result.chunk_name = chunk_name or ""
   result.chunk_size = string.len(chunk)
 
-  ---------------------------------------------------------------
-  -- tests if a given number of bytes is available
-  ---------------------------------------------------------------
-  local function IsChunkSizeOk(size, idx, errmsg)
-    if idx + size - 1 > result.chunk_size then
-      error(string.format("chunk too small for %s at offset %d", errmsg, idx - 1))
-    end
-  end
+
 
   ---------------------------------------------------------------
   -- loads a single byte and returns it as a number
@@ -224,7 +300,7 @@ function Dechunk(chunk_name, chunk)
   -- * rest of code assumes little-endian by default
   -------------------------------------------------------------
   local function LoadBlock(size)
-    if not pcall(IsChunkSizeOk, size, idx, "LoadBlock") then return end
+    if not pcall(IsChunkSizeOk, size, idx, result.chunk_size, "LoadBlock") then return end
     previdx = idx
     idx = idx + size
     local b = string.sub(chunk, idx - size, idx - 1)
@@ -264,7 +340,7 @@ convert_to["long long"] = convert_to["int"]
   -- test signature
   --
   len = string.len(config.SIGNATURE)
-  IsChunkSizeOk(len, idx, "header signature")
+  IsChunkSizeOk(len, idx, result.chunk_size, "header signature")
   if string.sub(chunk, 1, len) ~= config.SIGNATURE then
     error("header signature not found, this is not a Lua chunk")
   end
@@ -274,7 +350,7 @@ convert_to["long long"] = convert_to["int"]
   --
   -- test version
   --
-  IsChunkSizeOk(1, idx, "version byte")
+  IsChunkSizeOk(1, idx, result.chunk_size, "version byte")
   result.version = LoadByte()
   if result.version ~= config.VERSION then
     --error(string.format("Dechunk cannot read version %02X chunks", result.version))
@@ -287,7 +363,7 @@ convert_to["long long"] = convert_to["int"]
   -- * Dechunk does not accept anything other than 0. For custom
   -- * binary chunks, modify Dechunk to read it properly.
   --
-  IsChunkSizeOk(1, idx, "format byte")
+  IsChunkSizeOk(1, idx, result.chunk_size, "format byte")
   result.format = LoadByte()
   if result.format ~= config.FORMAT then
     error(string.format("Dechunk cannot read format %02X chunks", result.format))
@@ -297,7 +373,7 @@ convert_to["long long"] = convert_to["int"]
   --
   -- test endianness
   --
-  IsChunkSizeOk(1, idx, "endianness byte")
+  IsChunkSizeOk(1, idx, result.chunk_size, "endianness byte")
   local endianness = LoadByte()
   if not config.AUTO_DETECT then
     if endianness ~= GetLuaEndianness() then
@@ -311,7 +387,7 @@ convert_to["long long"] = convert_to["int"]
   --
   -- test sizes
   --
-  IsChunkSizeOk(4, idx, "size bytes")
+  IsChunkSizeOk(4, idx, result.chunk_size, "size bytes")
   local function TestSize(mysize, sizename, typename)
     local byte = LoadByte()
     if not config.AUTO_DETECT then
@@ -336,7 +412,7 @@ convert_to["long long"] = convert_to["int"]
   --
   -- test integral flag (5.1)
   --
-  IsChunkSizeOk(1, idx, "integral byte")
+  IsChunkSizeOk(1, idx, result.chunk_size, "integral byte")
   SetLuaIntegral(LoadByte())
   FormatLine(chunk, 1, "integral (1=integral)", previdx)
 
@@ -440,7 +516,7 @@ convert_to["long long"] = convert_to["int"]
         if len == 0 then        -- there is no error, return a nil
           return nil
         end
-        IsChunkSizeOk(len, idx, "LoadString")
+        IsChunkSizeOk(len, idx, result.chunk_size, "LoadString")
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len - 2)
         idx = idx + len
@@ -580,7 +656,7 @@ convert_to["long long"] = convert_to["int"]
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
-    if IsChunkSizeOk(4, idx, "function header") then return end
+    if IsChunkSizeOk(4, idx, result.chunk_size, "function header") then return end
     func.nups = LoadByte()
     func.numparams = LoadByte()
     func.is_vararg = LoadByte()
@@ -599,83 +675,6 @@ convert_to["long long"] = convert_to["int"]
     LoadUpvalues()   SetStat("upvalues")
     return func
     -- end of LoadFunction
-  end
-
-  ---------------------------------------------------------------
-  -- displays function information
-  -- * decoupled from LoadFunction due to 5.1 chunk rearrangement
-  ---------------------------------------------------------------
-  function DescFunction(chunk, func, num, level)
-    -------------------------------------------------------------
-    -- body of DescFunction() starts here
-    -------------------------------------------------------------
-    DescLine(chunk, "")
-    BriefLine("")
-    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")",
-               func.pos_source)
-    BriefLine("; function ["..num.."] definition (level "..level..")")
-    DescLine(chunk, "** start of function **")
-
-    -- source file name
-    DescString(chunk, func.source, func.pos_source)
-    if func.source == nil then
-      DescLine(chunk, "source name: (none)")
-    else
-      DescLine(chunk, "source name: "..EscapeString(func.source))
-    end
-
-    -- optionally initialize source listing merging
-    SourceInit(func.source)
-
-    -- line where the function was defined
-    local pos = func.pos_linedefined
-    FormatLine(chunk, GetLuaIntSize(), "line defined ("..func.linedefined..")", pos)
-    pos = pos + GetLuaIntSize()
-    FormatLine(chunk, GetLuaIntSize(), "last line defined ("..func.lastlinedefined..")", pos)
-    pos = pos + GetLuaIntSize()
-
-    -- display byte counts
-    FormatLine(chunk, 1, "nups ("..func.nups..")", pos)
-    FormatLine(chunk, 1, "numparams ("..func.numparams..")", pos + 1)
-    FormatLine(chunk, 1, "is_vararg ("..func.is_vararg..")", pos + 2)
-    FormatLine(chunk, 1, "maxstacksize ("..func.maxstacksize..")", pos + 3)
-    BriefLine(string.format("; %d upvalues, %d params, %d stacks",
-      func.nups, func.numparams, func.maxstacksize))
-    BriefLine(string.format(".function%s%d %d %d %d", GetOutputSep(),
-      func.nups, func.numparams, func.is_vararg, func.maxstacksize))
-
-    -- display parts of a chunk
-    if ShouldIPrintParts() then
-      DescLines(chunk,func)       -- brief displays 'declarations' first
-      DescLocals(chunk, func)
-      DescUpvalues(chunk, func)
-      DescConstantKs(chunk, func)
-      DescConstantPs(chunk, func)
-      DescCode(chunk, func)
-    else
-      DescCode(chunk, func)        -- normal displays positional order
-      DescConstantKs(chunk, func)
-      DescConstantPs(chunk, func)
-      DescLines(chunk,func)
-      DescLocals(chunk, func)
-      DescUpvalues(chunk, func)
-    end
-
-    -- show function statistics block
-    DisplayStat("* func header   = "..func.stat.header.." bytes")
-    DisplayStat("* lines size    = "..func.stat.lines.." bytes")
-    DisplayStat("* locals size   = "..func.stat.locals.." bytes")
-    DisplayStat("* upvalues size = "..func.stat.upvalues.." bytes")
-    DisplayStat("* consts size   = "..func.stat.consts.." bytes")
-    DisplayStat("* funcs size    = "..func.stat.funcs.." bytes")
-    DisplayStat("* code size     = "..func.stat.code.." bytes")
-    func.stat.total = func.stat.header + func.stat.lines +
-                      func.stat.locals + func.stat.upvalues +
-                      func.stat.consts + func.stat.funcs +
-                      func.stat.code
-    DisplayStat(chunk, "* TOTAL size    = "..func.stat.total.." bytes")
-    DescLine(chunk, "** end of function **\n")
-    BriefLine("; end of function\n")
   end
 
   --
