@@ -266,6 +266,43 @@ local function IsChunkSizeOk(size, idx, total_size, errmsg)
     end
 end
 
+--
+-- loads a block of endian-sensitive bytes
+-- * rest of code assumes little-endian by default
+--
+local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
+    if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
+    func_movetonext(size)
+    local b = string.sub(chunk, idx, idx + size - 1)
+    if GetLuaEndianness() == 1 then
+        return b
+    else-- reverse bytes if big endian
+        return string.reverse(b)
+    end
+end
+
+--
+-- loads an integer (signed)
+--
+local function LoadInt(chunk, total_size, idx, func_movetonext)
+    local x = LoadBlock(GetLuaIntSize(), chunk, total_size, idx, func_movetonext)
+    if not x then
+        error("could not load integer")
+    else
+    local sum = 0
+    for i = GetLuaIntSize(), 1, -1 do
+        sum = sum * 256 + string.byte(x, i)
+    end
+    -- test for negative number
+    if string.byte(x, GetLuaIntSize()) > 127 then
+        sum = sum - math.ldexp(1, 8 * GetLuaIntSize())
+    end
+    -- from the looks of it, integers needed are positive
+    if sum < 0 then error("bad integer") end
+    return sum
+    end
+end
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -284,6 +321,11 @@ function Dechunk(chunk_name, chunk)
   result.chunk_name = chunk_name or ""
   result.chunk_size = string.len(chunk)
 
+  
+  local function MoveToNextTok(size)
+    previdx = idx
+    idx = idx + size
+  end
 
 
   ---------------------------------------------------------------
@@ -293,22 +335,6 @@ function Dechunk(chunk_name, chunk)
     previdx = idx
     idx = idx + 1
     return string.byte(chunk, previdx)
-  end
-
-  -------------------------------------------------------------
-  -- loads a block of endian-sensitive bytes
-  -- * rest of code assumes little-endian by default
-  -------------------------------------------------------------
-  local function LoadBlock(size, chunk, total_size)
-    if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
-    previdx = idx
-    idx = idx + size
-    local b = string.sub(chunk, idx - size, idx - 1)
-    if GetLuaEndianness() == 1 then
-      return b
-    else-- reverse bytes if big endian
-      return string.reverse(b)
-    end
   end
 
 --
@@ -451,32 +477,10 @@ convert_to["long long"] = convert_to["int"]
     local func = {}
 
     -------------------------------------------------------------
-    -- loads an integer (signed)
-    -------------------------------------------------------------
-    local function LoadInt()
-      local x = LoadBlock(GetLuaIntSize(), chunk, result.chunk_size)
-      if not x then
-        error("could not load integer")
-      else
-        local sum = 0
-        for i = GetLuaIntSize(), 1, -1 do
-          sum = sum * 256 + string.byte(x, i)
-        end
-        -- test for negative number
-        if string.byte(x, GetLuaIntSize()) > 127 then
-          sum = sum - math.ldexp(1, 8 * GetLuaIntSize())
-        end
-        -- from the looks of it, integers needed are positive
-        if sum < 0 then error("bad integer") end
-        return sum
-      end
-    end
-
-    -------------------------------------------------------------
     -- loads a size_t (assume unsigned)
     -------------------------------------------------------------
     local function LoadSize()
-      local x = LoadBlock(GetLuaSizetSize(), chunk, result.chunk_size)
+      local x = LoadBlock(GetLuaSizetSize(), chunk, result.chunk_size, idx, MoveToNextTok)
       if not x then
         --error("could not load size_t") handled in LoadString()
         return
@@ -493,7 +497,7 @@ convert_to["long long"] = convert_to["int"]
     -- loads a number (lua_Number type)
     -------------------------------------------------------------
     local function LoadNumber()
-      local x = LoadBlock(GetLuaNumberSize(), chunk, result.chunk_size)
+      local x = LoadBlock(GetLuaNumberSize(), chunk, result.chunk_size, idx, MoveToNextTok)
       if not x then
         error("could not load lua_Number")
       else
@@ -528,12 +532,12 @@ convert_to["long long"] = convert_to["int"]
     -- load line information
     -------------------------------------------------------------
     local function LoadLines()
-      local size = LoadInt()
+      local size = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       func.pos_lineinfo = previdx
       func.lineinfo = {}
       func.sizelineinfo = size
       for i = 1, size do
-        func.lineinfo[i] = LoadInt()
+        func.lineinfo[i] = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       end
     end
 
@@ -541,7 +545,7 @@ convert_to["long long"] = convert_to["int"]
     -- load locals information
     -------------------------------------------------------------
     local function LoadLocals()
-      local n = LoadInt()
+      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       func.pos_locvars = previdx
       func.locvars = {}
       func.sizelocvars = n
@@ -549,9 +553,9 @@ convert_to["long long"] = convert_to["int"]
         local locvar = {}
         locvar.varname = LoadString()
         locvar.pos_varname = previdx
-        locvar.startpc = LoadInt()
+        locvar.startpc = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
         locvar.pos_startpc = previdx
-        locvar.endpc = LoadInt()
+        locvar.endpc = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
         locvar.pos_endpc = previdx
         func.locvars[i] = locvar
       end
@@ -561,7 +565,7 @@ convert_to["long long"] = convert_to["int"]
     -- load upvalues information
     -------------------------------------------------------------
     local function LoadUpvalues()
-      local n = LoadInt()
+      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       if n ~= 0 and n~= func.nups then
         error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
         return
@@ -583,7 +587,7 @@ convert_to["long long"] = convert_to["int"]
     -- load constants information (data)
     -------------------------------------------------------------
     local function LoadConstantKs()
-      local n = LoadInt()
+      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       func.pos_ks = previdx
       func.k = {}
       func.sizek = n
@@ -611,7 +615,7 @@ convert_to["long long"] = convert_to["int"]
     -- load constants information (local functions)
     -------------------------------------------------------------
     local function LoadConstantPs()
-      local n = LoadInt()
+      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       func.pos_ps = previdx
       func.p = {}
       func.sizep = n
@@ -625,12 +629,12 @@ convert_to["long long"] = convert_to["int"]
     -- load function code
     -------------------------------------------------------------
     local function LoadCode()
-      local size = LoadInt()
+      local size = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
       func.pos_code = previdx
       func.code = {}
       func.sizecode = size
       for i = 1, size do
-        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, result.chunk_size)
+        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, result.chunk_size, idx, MoveToNextTok)
       end
     end
 
@@ -649,9 +653,9 @@ convert_to["long long"] = convert_to["int"]
     func.pos_source = previdx
     if func.source == "" and level == 1 then func.source = funcname end
     -- line where the function was defined
-    func.linedefined = LoadInt()
+    func.linedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
     func.pos_linedefined = previdx
-    func.lastlinedefined = LoadInt()
+    func.lastlinedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
 
     -------------------------------------------------------------
     -- some byte counts
