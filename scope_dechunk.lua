@@ -267,6 +267,14 @@ local function IsChunkSizeOk(size, idx, total_size, errmsg)
 end
 
 --
+-- loads a single byte and returns it as a number
+--
+local function LoadByte(chunk, previdx, func_movetonext)
+    func_movetonext(1)
+    return string.byte(chunk, previdx)
+end
+
+--
 -- loads a block of endian-sensitive bytes
 -- * rest of code assumes little-endian by default
 --
@@ -303,6 +311,118 @@ local function LoadInt(chunk, total_size, idx, func_movetonext)
     end
 end
 
+    -------------------------------------------------------------
+    -- loads a size_t (assume unsigned)
+    -------------------------------------------------------------
+    local function LoadSize(chunk, total_size, idx, func_movetonext)
+      local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
+      if not x then
+        --error("could not load size_t") handled in LoadString()
+        return
+      else
+        local sum = 0
+        for i = GetLuaSizetSize(), 1, -1 do
+          sum = sum * 256 + string.byte(x, i)
+        end
+        return sum
+      end
+    end
+
+    -------------------------------------------------------------
+    -- loads a number (lua_Number type)
+    -------------------------------------------------------------
+    local function LoadNumber(chunk, total_size, idx, func_movetonext)
+      local x = LoadBlock(GetLuaNumberSize(), chunk, total_size, idx, func_movetonext)
+      if not x then
+        error("could not load lua_Number")
+      else
+        local convert_func = convert_from[GetLuaNumberType()]
+        if not convert_func then
+          error("could not find conversion function for lua_Number")
+        end
+        return convert_func(x)
+      end
+    end
+
+    -------------------------------------------------------------
+    -- load a string (size, data pairs)
+    -------------------------------------------------------------
+    local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+      local len = LoadSize(chunk, total_size, idx, func_movetonext)
+      if not len then
+        error("could not load String")
+      else
+        if len == 0 then        -- there is no error, return a nil
+          return nil
+        end
+        IsChunkSizeOk(len, idx, total_size, "LoadString")
+        -- note that ending NUL is removed
+        local s = string.sub(chunk, idx, idx + len - 2)
+        func_moveidx(len)
+        print("Got string >"..s.."< at idx"..idx.. "of length "..len)
+        return s
+      end
+    end
+
+    -------------------------------------------------------------
+    -- load line information
+    -------------------------------------------------------------
+    local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, func)
+      local size = LoadInt(chunk, total_size, idx, func_movetonext)
+      func.pos_lineinfo = previdx
+      print("VCVCVC Loading lines "..previdx..func.pos_lineinfo)
+      func.lineinfo = {}
+      func.sizelineinfo = size
+      for i = 1, size do
+        func.lineinfo[i] = LoadInt(chunk, total_size, idx, func_movetonext)
+      end
+    end
+
+    -------------------------------------------------------------
+    -- load locals information
+    -------------------------------------------------------------
+    local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+      local n = LoadInt(chunk, total_size, idx, func_movetonext)
+      func.pos_locvars = previdx
+      func.locvars = {}
+      func.sizelocvars = n
+      for i = 1, n do
+        local locvar = {}
+        locvar.varname = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        locvar.pos_varname = previdx
+        locvar.startpc = LoadInt(chunk, total_size, idx, func_movetonext)
+        locvar.pos_startpc = previdx
+        locvar.endpc = LoadInt(chunk, total_size, idx, func_movetonext)
+        locvar.pos_endpc = previdx
+        func.locvars[i] = locvar
+      end
+    end
+
+    -------------------------------------------------------------
+    -- load upvalues information
+    -------------------------------------------------------------
+    local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+      local n = LoadInt(chunk, total_size, idx, func_movetonext)
+      if n ~= 0 and n~= func.nups then
+        error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
+        return
+      end
+      func.pos_upvalues = previdx
+      func.upvalues = {}
+      func.sizeupvalues = n
+      func.posupvalues = {}
+      for i = 1, n do
+        func.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        func.posupvalues[i] = previdx
+        if not func.upvalues[i] then
+          error("empty string at index "..(i - 1).."in upvalue table")
+        end
+      end
+    end
+
+
+
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -327,14 +447,8 @@ function Dechunk(chunk_name, chunk)
     idx = idx + size
   end
 
-
-  ---------------------------------------------------------------
-  -- loads a single byte and returns it as a number
-  ---------------------------------------------------------------
-  local function LoadByte()
-    previdx = idx
-    idx = idx + 1
-    return string.byte(chunk, previdx)
+  local function MoveIdxLen(len)
+    idx = idx + len
   end
 
 --
@@ -377,7 +491,7 @@ convert_to["long long"] = convert_to["int"]
   -- test version
   --
   IsChunkSizeOk(1, idx, result.chunk_size, "version byte")
-  result.version = LoadByte()
+  result.version = LoadByte(chunk, idx, MoveToNextTok)
   if result.version ~= config.VERSION then
     --error(string.format("Dechunk cannot read version %02X chunks", result.version))
     print(string.format("Dechunk cannot read version %02X chunks", result.version))
@@ -390,7 +504,7 @@ convert_to["long long"] = convert_to["int"]
   -- * binary chunks, modify Dechunk to read it properly.
   --
   IsChunkSizeOk(1, idx, result.chunk_size, "format byte")
-  result.format = LoadByte()
+  result.format = LoadByte(chunk, idx, MoveToNextTok)
   if result.format ~= config.FORMAT then
     error(string.format("Dechunk cannot read format %02X chunks", result.format))
   end
@@ -400,7 +514,7 @@ convert_to["long long"] = convert_to["int"]
   -- test endianness
   --
   IsChunkSizeOk(1, idx, result.chunk_size, "endianness byte")
-  local endianness = LoadByte()
+  local endianness = LoadByte(chunk, idx, MoveToNextTok)
   if not config.AUTO_DETECT then
     if endianness ~= GetLuaEndianness() then
       error(string.format("unsupported endianness %s vs %s", endianness, GetLuaEndianness()))
@@ -415,7 +529,7 @@ convert_to["long long"] = convert_to["int"]
   --
   IsChunkSizeOk(4, idx, result.chunk_size, "size bytes")
   local function TestSize(mysize, sizename, typename)
-    local byte = LoadByte()
+    local byte = LoadByte(chunk, idx, MoveToNextTok)
     if not config.AUTO_DETECT then
       if byte ~= config[mysize] then
         error(string.format("mismatch in %s size (needs %d but read %d)",
@@ -439,7 +553,7 @@ convert_to["long long"] = convert_to["int"]
   -- test integral flag (5.1)
   --
   IsChunkSizeOk(1, idx, result.chunk_size, "integral byte")
-  SetLuaIntegral(LoadByte())
+  SetLuaIntegral(LoadByte(chunk, idx, MoveToNextTok))
   FormatLine(chunk, 1, "integral (1=integral)", previdx)
 
   --
@@ -475,147 +589,11 @@ convert_to["long long"] = convert_to["int"]
   --
   local function LoadFunction(funcname, num, level)
     local func = {}
-
-    -------------------------------------------------------------
-    -- loads a size_t (assume unsigned)
-    -------------------------------------------------------------
-    local function LoadSize()
-      local x = LoadBlock(GetLuaSizetSize(), chunk, result.chunk_size, idx, MoveToNextTok)
-      if not x then
-        --error("could not load size_t") handled in LoadString()
-        return
-      else
-        local sum = 0
-        for i = GetLuaSizetSize(), 1, -1 do
-          sum = sum * 256 + string.byte(x, i)
-        end
-        return sum
-      end
-    end
-
-    -------------------------------------------------------------
-    -- loads a number (lua_Number type)
-    -------------------------------------------------------------
-    local function LoadNumber()
-      local x = LoadBlock(GetLuaNumberSize(), chunk, result.chunk_size, idx, MoveToNextTok)
-      if not x then
-        error("could not load lua_Number")
-      else
-        local convert_func = convert_from[GetLuaNumberType()]
-        if not convert_func then
-          error("could not find conversion function for lua_Number")
-        end
-        return convert_func(x)
-      end
-    end
-
-    -------------------------------------------------------------
-    -- load a string (size, data pairs)
-    -------------------------------------------------------------
-    local function LoadString()
-      local len = LoadSize()
-      if not len then
-        error("could not load String")
-      else
-        if len == 0 then        -- there is no error, return a nil
-          return nil
-        end
-        IsChunkSizeOk(len, idx, result.chunk_size, "LoadString")
-        -- note that ending NUL is removed
-        local s = string.sub(chunk, idx, idx + len - 2)
-        idx = idx + len
-        return s
-      end
-    end
-
-    -------------------------------------------------------------
-    -- load line information
-    -------------------------------------------------------------
-    local function LoadLines()
-      local size = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      func.pos_lineinfo = previdx
-      func.lineinfo = {}
-      func.sizelineinfo = size
-      for i = 1, size do
-        func.lineinfo[i] = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      end
-    end
-
-    -------------------------------------------------------------
-    -- load locals information
-    -------------------------------------------------------------
-    local function LoadLocals()
-      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      func.pos_locvars = previdx
-      func.locvars = {}
-      func.sizelocvars = n
-      for i = 1, n do
-        local locvar = {}
-        locvar.varname = LoadString()
-        locvar.pos_varname = previdx
-        locvar.startpc = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-        locvar.pos_startpc = previdx
-        locvar.endpc = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-        locvar.pos_endpc = previdx
-        func.locvars[i] = locvar
-      end
-    end
-
-    -------------------------------------------------------------
-    -- load upvalues information
-    -------------------------------------------------------------
-    local function LoadUpvalues()
-      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      if n ~= 0 and n~= func.nups then
-        error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
-        return
-      end
-      func.pos_upvalues = previdx
-      func.upvalues = {}
-      func.sizeupvalues = n
-      func.posupvalues = {}
-      for i = 1, n do
-        func.upvalues[i] = LoadString()
-        func.posupvalues[i] = previdx
-        if not func.upvalues[i] then
-          error("empty string at index "..(i - 1).."in upvalue table")
-        end
-      end
-    end
-
-    -------------------------------------------------------------
-    -- load constants information (data)
-    -------------------------------------------------------------
-    local function LoadConstantKs()
-      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      func.pos_ks = previdx
-      func.k = {}
-      func.sizek = n
-      func.posk = {}
-      for i = 1, n do
-        local t = LoadByte()
-        func.posk[i] = previdx
-        if t == GetTypeNumber() then
-          func.k[i] = LoadNumber()
-        elseif t == GetTypeBoolean() then
-          local b = LoadByte()
-          if b == 0 then b = false else b = true end
-          func.k[i] = b
-        elseif t == GetTypeString() then
-          func.k[i] = LoadString()
-        elseif t == GetTypeNIL() then
-          func.k[i] = nil
-        else
-          error("bad constant type "..t.." at "..previdx)
-        end
-      end--for
-    end
-
     -------------------------------------------------------------
     -- load constants information (local functions)
     -------------------------------------------------------------
-    local function LoadConstantPs()
-      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
+    local function LoadConstantPs(chunk, total_size, idx, func_movetonext)
+      local n = LoadInt(chunk, total_size, idx, func_movetonext)
       func.pos_ps = previdx
       func.p = {}
       func.sizep = n
@@ -625,11 +603,45 @@ convert_to["long long"] = convert_to["int"]
       end
     end
 
+        -------------------------------------------------------------
+    -- load constants information (data)
+    -------------------------------------------------------------
+    local function LoadConstantKs(chunk, total_size, func_movetonext, func_moveidx)
+      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
+      func.pos_ks = previdx
+      func.k = {}
+      func.sizek = n
+      func.posk = {}
+      print("Loading "..n.." constants")
+      for i = 1, n do
+        local t = LoadByte(chunk, idx, MoveToNextTok)
+        func.posk[i] = previdx
+        if t == GetTypeNumber() then
+          print("Got Number")
+          func.k[i] = LoadNumber(chunk, total_size, idx, func_movetonext)
+        elseif t == GetTypeBoolean() then
+          print("Got boolan")
+          local b = LoadByte(chunk, idx, func_movetonext)
+          if b == 0 then b = false else b = true end
+          func.k[i] = b
+        elseif t == GetTypeString() then
+          print("Got string")
+          func.k[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        elseif t == GetTypeNIL() then
+          print("NIL")
+          func.k[i] = nil
+        else
+          error(i.." bad constant type "..t.." at "..previdx)
+        end
+      end--for
+    end
+
     -------------------------------------------------------------
     -- load function code
     -------------------------------------------------------------
     local function LoadCode()
       local size = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
+      print("Loading code of Size", size)
       func.pos_code = previdx
       func.code = {}
       func.sizecode = size
@@ -637,7 +649,6 @@ convert_to["long long"] = convert_to["int"]
         func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, result.chunk_size, idx, MoveToNextTok)
       end
     end
-
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
@@ -649,34 +660,42 @@ convert_to["long long"] = convert_to["int"]
       start = idx
     end
     -- source file name
-    func.source = LoadString()
+    func.source = LoadString(chunk, result.chunk_size, idx, MoveToNextTok, MoveIdxLen)
     func.pos_source = previdx
     if func.source == "" and level == 1 then func.source = funcname end
     -- line where the function was defined
+    print("Func source:" .. func.source)
     func.linedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
+    print("Pos ".. func.linedefined)
     func.pos_linedefined = previdx
     func.lastlinedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-
+    print("Last line"..func.lastlinedefined)
+print "1"
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
     if IsChunkSizeOk(4, idx, result.chunk_size, "function header") then return end
-    func.nups = LoadByte()
-    func.numparams = LoadByte()
-    func.is_vararg = LoadByte()
-    func.maxstacksize = LoadByte()
+    func.nups = LoadByte(chunk, idx, MoveToNextTok)
+    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
     SetStat("header")
-
+    print("Num params"..func.numparams)
+    print("Max stack size"..func.maxstacksize)
+print "2"
     -------------------------------------------------------------
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
     -- load parts of a chunk (rearranged in 5.1)
     LoadCode()       SetStat("code")
-    LoadConstantKs() SetStat("consts")
-    LoadConstantPs() SetStat("funcs")
-    LoadLines()      SetStat("lines")
-    LoadLocals()     SetStat("locals")
-    LoadUpvalues()   SetStat("upvalues")
+print "2.4"
+    LoadConstantKs(chunk, result.chunk_size, MoveToNextTok, MoveIdxLen) SetStat("consts")
+print "2.8"
+    LoadConstantPs(chunk, result.chunk_size, idx, MoveToNextTok,func) SetStat("funcs")
+    print "3"
+    LoadLines(chunk, result.chunk_size, idx, previdx, MoveToNextTok,func)      SetStat("lines")
+    LoadLocals(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
+    LoadUpvalues(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
     return func
     -- end of LoadFunction
   end
