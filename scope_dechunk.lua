@@ -311,49 +311,49 @@ local function LoadInt(chunk, total_size, idx, func_movetonext)
     end
 end
 
-    -------------------------------------------------------------
-    -- loads a size_t (assume unsigned)
-    -------------------------------------------------------------
-    local function LoadSize(chunk, total_size, idx, func_movetonext)
-      local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
-      if not x then
+--
+-- loads a size_t (assume unsigned)
+--
+local function LoadSize(chunk, total_size, idx, func_movetonext)
+    local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
+    if not x then
         --error("could not load size_t") handled in LoadString()
         return
-      else
+    else
         local sum = 0
         for i = GetLuaSizetSize(), 1, -1 do
-          sum = sum * 256 + string.byte(x, i)
+            sum = sum * 256 + string.byte(x, i)
         end
         return sum
-      end
     end
+end
 
-    -------------------------------------------------------------
-    -- loads a number (lua_Number type)
-    -------------------------------------------------------------
-    local function LoadNumber(chunk, total_size, idx, func_movetonext)
-      local x = LoadBlock(GetLuaNumberSize(), chunk, total_size, idx, func_movetonext)
-      if not x then
+--
+-- loads a number (lua_Number type)
+--
+local function LoadNumber(chunk, total_size, idx, func_movetonext)
+    local x = LoadBlock(GetLuaNumberSize(), chunk, total_size, idx, func_movetonext)
+    if not x then
         error("could not load lua_Number")
-      else
+    else
         local convert_func = convert_from[GetLuaNumberType()]
         if not convert_func then
-          error("could not find conversion function for lua_Number")
+            error("could not find conversion function for lua_Number")
         end
         return convert_func(x)
-      end
     end
+end
 
-    -------------------------------------------------------------
-    -- load a string (size, data pairs)
-    -------------------------------------------------------------
-    local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
-      local len = LoadSize(chunk, total_size, idx, func_movetonext)
-      if not len then
+--
+-- load a string (size, data pairs)
+--
+local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+    local len = LoadSize(chunk, total_size, idx, func_movetonext)
+    if not len then
         error("could not load String")
-      else
+    else
         if len == 0 then        -- there is no error, return a nil
-          return nil
+            return nil
         end
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
@@ -361,32 +361,32 @@ end
         func_moveidx(len)
         print("Got string >"..s.."< at idx"..idx.. "of length "..len)
         return s
-      end
     end
+end
 
-    -------------------------------------------------------------
-    -- load line information
-    -------------------------------------------------------------
-    local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, func)
-      local size = LoadInt(chunk, total_size, idx, func_movetonext)
-      func.pos_lineinfo = previdx
-      print("VCVCVC Loading lines "..previdx..func.pos_lineinfo)
-      func.lineinfo = {}
-      func.sizelineinfo = size
-      for i = 1, size do
+--
+-- load line information
+--
+local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, func)
+    local size = LoadInt(chunk, total_size, idx, func_movetonext)
+    func.pos_lineinfo = previdx
+    print("VCVCVC Loading lines "..previdx..func.pos_lineinfo)
+    func.lineinfo = {}
+    func.sizelineinfo = size
+    for i = 1, size do
         func.lineinfo[i] = LoadInt(chunk, total_size, idx, func_movetonext)
-      end
     end
+end
 
-    -------------------------------------------------------------
-    -- load locals information
-    -------------------------------------------------------------
-    local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
-      local n = LoadInt(chunk, total_size, idx, func_movetonext)
-      func.pos_locvars = previdx
-      func.locvars = {}
-      func.sizelocvars = n
-      for i = 1, n do
+--
+-- load locals information
+--
+local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    func.pos_locvars = previdx
+    func.locvars = {}
+    func.sizelocvars = n
+    for i = 1, n do
         local locvar = {}
         locvar.varname = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         locvar.pos_varname = previdx
@@ -395,32 +395,30 @@ end
         locvar.endpc = LoadInt(chunk, total_size, idx, func_movetonext)
         locvar.pos_endpc = previdx
         func.locvars[i] = locvar
-      end
     end
+end
 
-    -------------------------------------------------------------
-    -- load upvalues information
-    -------------------------------------------------------------
-    local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
-      local n = LoadInt(chunk, total_size, idx, func_movetonext)
-      if n ~= 0 and n~= func.nups then
+--
+-- load upvalues information
+--
+local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    if n ~= 0 and n~= func.nups then
         error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
         return
-      end
-      func.pos_upvalues = previdx
-      func.upvalues = {}
-      func.sizeupvalues = n
-      func.posupvalues = {}
-      for i = 1, n do
+    end
+    func.pos_upvalues = previdx
+    func.upvalues = {}
+    func.sizeupvalues = n
+    func.posupvalues = {}
+    for i = 1, n do
         func.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         func.posupvalues[i] = previdx
         if not func.upvalues[i] then
-          error("empty string at index "..(i - 1).."in upvalue table")
+            error("empty string at index "..(i - 1).."in upvalue table")
         end
-      end
     end
-
-
+end
 
 
 --[[
@@ -592,7 +590,7 @@ convert_to["long long"] = convert_to["int"]
     -------------------------------------------------------------
     -- load constants information (local functions)
     -------------------------------------------------------------
-    local function LoadConstantPs(chunk, total_size, idx, func_movetonext)
+    local function LoadConstantPs(chunk, total_size, idx, func_movetonext, func)
       local n = LoadInt(chunk, total_size, idx, func_movetonext)
       func.pos_ps = previdx
       func.p = {}
