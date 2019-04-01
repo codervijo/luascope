@@ -420,6 +420,19 @@ local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, fu
     end
 end
 
+--
+-- load function code
+--
+local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, func)
+    local size = LoadInt(chunk, total_size, idx, func_movetonext)
+    print("Loading code of Size", size)
+    func.pos_code = previdx
+    func.code = {}
+    func.sizecode = size
+    for i = 1, size do
+        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, total_size, idx, func_movetonext)
+    end
+end
 
 --[[
 -- Dechunk main processing function
@@ -635,19 +648,6 @@ convert_to["long long"] = convert_to["int"]
     end
 
     -------------------------------------------------------------
-    -- load function code
-    -------------------------------------------------------------
-    local function LoadCode()
-      local size = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      print("Loading code of Size", size)
-      func.pos_code = previdx
-      func.code = {}
-      func.sizecode = size
-      for i = 1, size do
-        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, result.chunk_size, idx, MoveToNextTok)
-      end
-    end
-    -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
     -- statistics handler
@@ -685,7 +685,7 @@ print "2"
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
     -- load parts of a chunk (rearranged in 5.1)
-    LoadCode()       SetStat("code")
+    LoadCode(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func)       SetStat("code")
 print "2.4"
     LoadConstantKs(chunk, result.chunk_size, MoveToNextTok, MoveIdxLen) SetStat("consts")
 print "2.8"
