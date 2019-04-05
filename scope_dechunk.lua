@@ -280,7 +280,9 @@ end
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
-    func_movetonext(size)
+    if func_movetonext ~= nil then
+        func_movetonext(size)
+    end
     local b = string.sub(chunk, idx, idx + size - 1)
     if GetLuaEndianness() == 1 then
         return b
@@ -359,11 +361,30 @@ local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len - 2)
         func_moveidx(len)
-        print("Got string >"..s.."< at idx"..idx.. "of length "..len)
+        print("Loading string at idx "..idx.. " of length "..len .. ">"..s.."<")
         return s
     end
 end
 
+--
+-- Find size of string to be loaded (size, data pairs)
+--
+local function SizeLoadString(chunk, total_size, idx)
+    local len = LoadSize(chunk, total_size, idx)
+    if not len then
+        error("could not load String")
+    else
+        if len == 0 then        -- there is no error, return a nil
+            return 0
+        end
+        IsChunkSizeOk(len, idx, total_size, "LoadString")
+        -- note that ending NUL is removed
+        --local s = string.sub(chunk, idx, idx + len - 2)
+        print("Size of String to Load at idx "..idx.. " of length "..len)
+        --return s
+        return len
+    end
+end
 --
 -- load line information
 --
@@ -432,6 +453,46 @@ local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, func)
     for i = 1, size do
         func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, total_size, idx, func_movetonext)
     end
+end
+
+--
+-- load constants information (data)
+--
+local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, func)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    func.pos_ks = previdx
+    func.k = {}
+    func.sizek = n
+    func.posk = {}
+    pidx = idx
+    ix = idx + GetLuaIntSize()
+    print("Loading "..n.." constants")
+    for i = 1, n do
+        local t = LoadByte(chunk, ix, func_movetonext)
+        pidx = pidx + 1
+        ix = ix + 1
+        func.posk[i] = pidx
+        if t == GetTypeNumber() then
+            print("Got Number")
+            func.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
+        elseif t == GetTypeBoolean() then
+            print("Got boolan")
+            local b = LoadByte(chunk, ix, func_movetonext)
+            if b == 0 then b = false else b = true end
+            func.k[i] = b
+        elseif t == GetTypeString() then
+            print("Got string")
+            func.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
+            local strsize = SizeLoadString(chunk, total_size, ix)
+            ix = ix + GetLuaSizetSize() + strsize
+            pidx = pidx + GetLuaSizetSize() + strsize
+        elseif t == GetTypeNIL() then
+            print("NIL")
+            func.k[i] = nil
+        else
+            error(i.." bad constant type "..t.." at "..previdx)
+        end
+    end--for
 end
 
 --[[
@@ -614,38 +675,7 @@ convert_to["long long"] = convert_to["int"]
       end
     end
 
-        -------------------------------------------------------------
-    -- load constants information (data)
-    -------------------------------------------------------------
-    local function LoadConstantKs(chunk, total_size, func_movetonext, func_moveidx)
-      local n = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-      func.pos_ks = previdx
-      func.k = {}
-      func.sizek = n
-      func.posk = {}
-      print("Loading "..n.." constants")
-      for i = 1, n do
-        local t = LoadByte(chunk, idx, MoveToNextTok)
-        func.posk[i] = previdx
-        if t == GetTypeNumber() then
-          print("Got Number")
-          func.k[i] = LoadNumber(chunk, total_size, idx, func_movetonext)
-        elseif t == GetTypeBoolean() then
-          print("Got boolan")
-          local b = LoadByte(chunk, idx, func_movetonext)
-          if b == 0 then b = false else b = true end
-          func.k[i] = b
-        elseif t == GetTypeString() then
-          print("Got string")
-          func.k[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
-        elseif t == GetTypeNIL() then
-          print("NIL")
-          func.k[i] = nil
-        else
-          error(i.." bad constant type "..t.." at "..previdx)
-        end
-      end--for
-    end
+
 
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
@@ -685,15 +715,15 @@ print "2"
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
     -- load parts of a chunk (rearranged in 5.1)
-    LoadCode(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func)       SetStat("code")
+    LoadCode(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func)                 SetStat("code")
 print "2.4"
-    LoadConstantKs(chunk, result.chunk_size, MoveToNextTok, MoveIdxLen) SetStat("consts")
+    LoadConstantKs(chunk, result.chunk_size, idx, previdx, MoveToNextTok, MoveIdxLen, func)                   SetStat("consts")
 print "2.8"
-    LoadConstantPs(chunk, result.chunk_size, idx, MoveToNextTok,func) SetStat("funcs")
+    LoadConstantPs(chunk, result.chunk_size, idx, MoveToNextTok,func)                     SetStat("funcs")
     print "3"
-    LoadLines(chunk, result.chunk_size, idx, previdx, MoveToNextTok,func)      SetStat("lines")
-    LoadLocals(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
-    LoadUpvalues(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
+    LoadLines(chunk, result.chunk_size, idx, previdx, MoveToNextTok,func)                 SetStat("lines")
+    LoadLocals(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("locals")
+    LoadUpvalues(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen) SetStat("upvalues")
     return func
     -- end of LoadFunction
   end
