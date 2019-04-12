@@ -319,7 +319,8 @@ end
 local function LoadSize(chunk, total_size, idx, func_movetonext)
     local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
     if not x then
-        --error("could not load size_t") handled in LoadString()
+        print("total_size was ", total_size)
+        error("could not load size_t at "..idx) --handled in LoadString()
         return
     else
         local sum = 0
@@ -495,6 +496,89 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
     end--for
 end
 
+--
+-- this is recursively called to load the chunk or function body
+--
+function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
+    local func = {}
+    local idx  = ix
+    local previdx = pix
+
+      local function MoveToNextTok(size)
+    previdx = idx
+    idx = idx + size
+    end
+
+    local function MoveIdxLen(len)
+    idx = idx + len
+    end
+    -------------------------------------------------------------
+    -- load constants information (local functions)
+    -------------------------------------------------------------
+    local function LoadConstantPs(chunk, total_size, idx, func_movetonext, func)
+      local n = LoadInt(chunk, total_size, idx, func_movetonext)
+      func.pos_ps = previdx
+      func.p = {}
+      func.sizep = n
+      for i = 1, n do
+        -- recursive call back on itself, next level
+        func.p[i] = LoadFunction(chunk, total_size, idx, previdx, func.source, i - 1, level + 1)
+      end
+    end
+
+    -------------------------------------------------------------
+    -- body of LoadFunction() starts here
+    -------------------------------------------------------------
+    -- statistics handler
+    local start = idx
+    func.stat = {}
+    local function SetStat(item)
+      func.stat[item] = idx - start
+      start = idx
+    end
+    -- source file name
+    print("Loading string at "..idx)
+    func.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    func.pos_source = previdx
+    if func.source == "" and level == 1 then func.source = funcname end
+    -- line where the function was defined
+    print("Func source:" .. func.source)
+    func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Pos ".. func.linedefined)
+    func.pos_linedefined = previdx
+    func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Last line"..func.lastlinedefined)
+    print "1"
+    -------------------------------------------------------------
+    -- some byte counts
+    -------------------------------------------------------------
+    if IsChunkSizeOk(4, idx, total_size, "function header") then return end
+    func.nups = LoadByte(chunk, idx, MoveToNextTok)
+    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    SetStat("header")
+    print("Num params"..func.numparams)
+    print("Max stack size"..func.maxstacksize)
+    print "2"
+    -------------------------------------------------------------
+    -- these are lists, LoadConstantPs() may be recursive
+    -------------------------------------------------------------
+    -- load parts of a chunk (rearranged in 5.1)
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                 SetStat("code")
+    print "2.4"
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func)                   SetStat("consts")
+    print "2.8"
+    LoadConstantPs(chunk, total_size, idx, MoveToNextTok,func)                     SetStat("funcs")
+    print "3"
+    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                 SetStat("lines")
+    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("locals")
+    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen) SetStat("upvalues")
+    return func
+    -- end of LoadFunction
+end
+
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -513,14 +597,18 @@ function Dechunk(chunk_name, chunk)
   result.chunk_name = chunk_name or ""
   result.chunk_size = string.len(chunk)
 
-  
-  local function MoveToNextTok(size)
+    local function MoveToNextTok(size)
     previdx = idx
     idx = idx + size
   end
 
   local function MoveIdxLen(len)
     idx = idx + len
+  end
+
+
+  local function GetIndices()
+    return idx, previdx
   end
 
 --
@@ -656,82 +744,11 @@ convert_to["long long"] = convert_to["int"]
   DisplayStat("* global header = "..stat.header.." bytes")
   DescLine("** global header end **")
 
-  --
-  -- this is recursively called to load the chunk or function body
-  --
-  local function LoadFunction(funcname, num, level)
-    local func = {}
-    -------------------------------------------------------------
-    -- load constants information (local functions)
-    -------------------------------------------------------------
-    local function LoadConstantPs(chunk, total_size, idx, func_movetonext, func)
-      local n = LoadInt(chunk, total_size, idx, func_movetonext)
-      func.pos_ps = previdx
-      func.p = {}
-      func.sizep = n
-      for i = 1, n do
-        -- recursive call back on itself, next level
-        func.p[i] = LoadFunction(func.source, i - 1, level + 1)
-      end
-    end
-
-
-
-    -------------------------------------------------------------
-    -- body of LoadFunction() starts here
-    -------------------------------------------------------------
-    -- statistics handler
-    local start = idx
-    func.stat = {}
-    local function SetStat(item)
-      func.stat[item] = idx - start
-      start = idx
-    end
-    -- source file name
-    func.source = LoadString(chunk, result.chunk_size, idx, MoveToNextTok, MoveIdxLen)
-    func.pos_source = previdx
-    if func.source == "" and level == 1 then func.source = funcname end
-    -- line where the function was defined
-    print("Func source:" .. func.source)
-    func.linedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-    print("Pos ".. func.linedefined)
-    func.pos_linedefined = previdx
-    func.lastlinedefined = LoadInt(chunk, result.chunk_size, idx, MoveToNextTok)
-    print("Last line"..func.lastlinedefined)
-print "1"
-    -------------------------------------------------------------
-    -- some byte counts
-    -------------------------------------------------------------
-    if IsChunkSizeOk(4, idx, result.chunk_size, "function header") then return end
-    func.nups = LoadByte(chunk, idx, MoveToNextTok)
-    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
-    SetStat("header")
-    print("Num params"..func.numparams)
-    print("Max stack size"..func.maxstacksize)
-print "2"
-    -------------------------------------------------------------
-    -- these are lists, LoadConstantPs() may be recursive
-    -------------------------------------------------------------
-    -- load parts of a chunk (rearranged in 5.1)
-    LoadCode(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func)                 SetStat("code")
-print "2.4"
-    LoadConstantKs(chunk, result.chunk_size, idx, previdx, MoveToNextTok, MoveIdxLen, func)                   SetStat("consts")
-print "2.8"
-    LoadConstantPs(chunk, result.chunk_size, idx, MoveToNextTok,func)                     SetStat("funcs")
-    print "3"
-    LoadLines(chunk, result.chunk_size, idx, previdx, MoveToNextTok,func)                 SetStat("lines")
-    LoadLocals(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("locals")
-    LoadUpvalues(chunk, result.chunk_size, idx, previdx, MoveToNextTok, func, MoveIdxLen) SetStat("upvalues")
-    return func
-    -- end of LoadFunction
-  end
 
   --
   -- actual call to start the function loading process
   --
-  result.func = LoadFunction("(chunk)", 0, 1)
+  result.func = LoadFunction(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
   DescFunction(chunk, result.func, 0, 1)
   stat.total = idx - 1
   DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
