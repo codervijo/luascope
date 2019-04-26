@@ -504,7 +504,7 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
     local idx  = ix
     local previdx = pix
 
-      local function MoveToNextTok(size)
+    local function MoveToNextTok(size)
     previdx = idx
     idx = idx + size
     end
@@ -606,10 +606,6 @@ function Dechunk(chunk_name, chunk)
     idx = idx + len
   end
 
-
-  local function GetIndices()
-    return idx, previdx
-  end
 
 --
 -- * WARNING this will fail for large long longs (64-bit numbers)
