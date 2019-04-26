@@ -496,6 +496,20 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
     end--for
 end
 
+-------------------------------------------------------------
+-- load constants information (local functions)
+-------------------------------------------------------------
+local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, func)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    func.pos_ps = previdx
+    func.p = {}
+    func.sizep = n
+    for i = 1, n do
+        -- recursive call back on itself, next level
+        func.p[i] = LoadFunction(chunk, total_size, idx, previdx, func.source, i - 1, level + 1)
+    end
+end
+
 --
 -- this is recursively called to load the chunk or function body
 --
@@ -511,19 +525,6 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
 
     local function MoveIdxLen(len)
     idx = idx + len
-    end
-    -------------------------------------------------------------
-    -- load constants information (local functions)
-    -------------------------------------------------------------
-    local function LoadConstantPs(chunk, total_size, idx, func_movetonext, func)
-      local n = LoadInt(chunk, total_size, idx, func_movetonext)
-      func.pos_ps = previdx
-      func.p = {}
-      func.sizep = n
-      for i = 1, n do
-        -- recursive call back on itself, next level
-        func.p[i] = LoadFunction(chunk, total_size, idx, previdx, func.source, i - 1, level + 1)
-      end
     end
 
     -------------------------------------------------------------
@@ -569,7 +570,7 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
     print "2.4"
     LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func)                   SetStat("consts")
     print "2.8"
-    LoadConstantPs(chunk, total_size, idx, MoveToNextTok,func)                     SetStat("funcs")
+    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)                     SetStat("funcs")
     print "3"
     LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                 SetStat("lines")
     LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("locals")
