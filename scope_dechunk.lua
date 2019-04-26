@@ -496,9 +496,9 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
     end--for
 end
 
--------------------------------------------------------------
+--
 -- load constants information (local functions)
--------------------------------------------------------------
+--
 local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, func)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
     func.pos_ps = previdx
@@ -579,6 +579,14 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
     -- end of LoadFunction
 end
 
+function CheckSignature(size, idx, chunk)
+    len = string.len(config.SIGNATURE)
+    IsChunkSizeOk(len, idx, size, "header signature")
+    if string.sub(chunk, 1, len) ~= config.SIGNATURE then
+        error("header signature not found, this is not a Lua chunk")
+    end
+    return len
+end
 
 --[[
 -- Dechunk main processing function
@@ -625,22 +633,12 @@ convert_to["long long"] = convert_to["int"]
   --
   -- initialize listing display
   --
-  DisplayInit(result.chunk_size)
-  HeaderLine()                  -- listing display starts here
-  if result.chunk_name then
-    FormatLine(chunk, 0, "** source chunk: "..result.chunk_name, idx)
-    if ShouldIPrintBrief() then WriteLine(GetOutputComment().."source chunk: "..result.chunk_name) end
-  end
-  DescLine("** global header start **")
+  OutputHeader(result.chunk_size, result.chunk_name, chunk, idx)
 
   --
   -- test signature
   --
-  len = string.len(config.SIGNATURE)
-  IsChunkSizeOk(len, idx, result.chunk_size, "header signature")
-  if string.sub(chunk, 1, len) ~= config.SIGNATURE then
-    error("header signature not found, this is not a Lua chunk")
-  end
+  len = CheckSignature(result.chunk_size, idx, chunk)
   FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
   idx = idx + len
 

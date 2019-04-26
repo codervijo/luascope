@@ -179,3 +179,15 @@ function FormatLine(chunk, size, desc, index, segment)
 	end
 	-- end of FormatLine
 end
+
+function OutputHeader(size, name, chunk, idx)
+	DisplayInit(size)
+	HeaderLine()                  -- listing display starts here
+	if name then
+		FormatLine(chunk, 0, "** source chunk: "..name, idx)
+		if ShouldIPrintBrief() then
+			WriteLine(GetOutputComment().."source chunk: "..name)
+		end
+	end
+	DescLine("** global header start **")
+end
