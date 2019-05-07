@@ -588,6 +588,25 @@ function CheckSignature(size, idx, chunk)
     return len
 end
 
+function CheckVersion(size, idx, chunk, func_movetonext)
+    IsChunkSizeOk(1, idx, size, "version byte")
+    ver = LoadByte(chunk, idx, func_movetonext)
+    if ver ~= config.VERSION then
+        --error(string.format("Dechunk cannot read version %02X chunks", ver))
+        print(string.format("Dechunk cannot read version %02X chunks", ver))
+    end
+    return ver
+end
+
+function CheckFormat(size, idx, chunk, func_movetonext)
+    IsChunkSizeOk(1, idx, size, "format byte")
+    format = LoadByte(chunk, idx, func_movetonext)
+    if format ~= config.FORMAT then
+        error(string.format("Dechunk cannot read format %02X chunks", format))
+    end
+    return format
+end
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -596,159 +615,150 @@ end
 --]]
 
 function Dechunk(chunk_name, chunk)
-  ---------------------------------------------------------------
-  -- variables
-  ---------------------------------------------------------------
-  local idx = 1
-  local previdx, len
-  local result = {}     -- table with all parsed data
-  local stat = {}
-  result.chunk_name = chunk_name or ""
-  result.chunk_size = string.len(chunk)
+    ---------------------------------------------------------------
+    -- variables
+    ---------------------------------------------------------------
+    local idx = 1
+    local previdx, len
+    local result = {}     -- table with all parsed data
+    local stat = {}
+    result.chunk_name = chunk_name or ""
+    result.chunk_size = string.len(chunk)
 
     local function MoveToNextTok(size)
-    previdx = idx
-    idx = idx + size
-  end
-
-  local function MoveIdxLen(len)
-    idx = idx + len
-  end
-
-
---
--- * WARNING this will fail for large long longs (64-bit numbers)
---   because long longs exceeds the precision of doubles.
---
-convert_to["long long"] = convert_to["int"]
-
---[[-------------------------------------------------------------------
--- Display support functions
--- * considerable work is done to maintain nice alignments
--- * some widths are initialized at chunk start
--- * this is meant to make output customization easy
---]]-------------------------------------------------------------------
-
-
-  --
-  -- initialize listing display
-  --
-  OutputHeader(result.chunk_size, result.chunk_name, chunk, idx)
-
-  --
-  -- test signature
-  --
-  len = CheckSignature(result.chunk_size, idx, chunk)
-  FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
-  idx = idx + len
-
-  --
-  -- test version
-  --
-  IsChunkSizeOk(1, idx, result.chunk_size, "version byte")
-  result.version = LoadByte(chunk, idx, MoveToNextTok)
-  if result.version ~= config.VERSION then
-    --error(string.format("Dechunk cannot read version %02X chunks", result.version))
-    print(string.format("Dechunk cannot read version %02X chunks", result.version))
-  end
-  FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
-
-  --
-  -- test format (5.1)
-  -- * Dechunk does not accept anything other than 0. For custom
-  -- * binary chunks, modify Dechunk to read it properly.
-  --
-  IsChunkSizeOk(1, idx, result.chunk_size, "format byte")
-  result.format = LoadByte(chunk, idx, MoveToNextTok)
-  if result.format ~= config.FORMAT then
-    error(string.format("Dechunk cannot read format %02X chunks", result.format))
-  end
-  FormatLine(chunk, 1, "format (0=official)", previdx)
-
-  --
-  -- test endianness
-  --
-  IsChunkSizeOk(1, idx, result.chunk_size, "endianness byte")
-  local endianness = LoadByte(chunk, idx, MoveToNextTok)
-  if not config.AUTO_DETECT then
-    if endianness ~= GetLuaEndianness() then
-      error(string.format("unsupported endianness %s vs %s", endianness, GetLuaEndianness()))
+        previdx = idx
+        idx = idx + size
     end
-  else
-    SetLuaEndianness(endianness)
-  end
-  FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
 
-  --
-  -- test sizes
-  --
-  IsChunkSizeOk(4, idx, result.chunk_size, "size bytes")
-  local function TestSize(mysize, sizename, typename)
+    local function MoveIdxLen(len)
+        idx = idx + len
+    end
+
+
+    --
+    -- * WARNING this will fail for large long longs (64-bit numbers)
+    --   because long longs exceeds the precision of doubles.
+    --
+    convert_to["long long"] = convert_to["int"]
+
+    --[[-------------------------------------------------------------------
+    -- Display support functions
+    -- * considerable work is done to maintain nice alignments
+    -- * some widths are initialized at chunk start
+    -- * this is meant to make output customization easy
+    --]]-------------------------------------------------------------------
+
+
+    --
+    -- initialize listing display
+    --
+    OutputHeader(result.chunk_size, result.chunk_name, chunk, idx)
+
+    --
+    -- test signature
+    --
+    len = CheckSignature(result.chunk_size, idx, chunk)
+    FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
+    idx = idx + len
+
+    --
+    -- test version
+    --
+    result.version = CheckVersion(result.chunk_size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
+
+    --
+    -- test format (5.1)
+    -- * Dechunk does not accept anything other than 0. For custom
+    -- * binary chunks, modify Dechunk to read it properly.
+    --
+    result.format = CheckFormat(result.chunk_size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "format (0=official)", previdx)
+
+    --
+    -- test endianness
+    --
+    IsChunkSizeOk(1, idx, result.chunk_size, "endianness byte")
+    local endianness = LoadByte(chunk, idx, MoveToNextTok)
+    if not config.AUTO_DETECT then
+        if endianness ~= GetLuaEndianness() then
+            error(string.format("unsupported endianness %s vs %s", endianness, GetLuaEndianness()))
+        end
+    else
+        SetLuaEndianness(endianness)
+    end
+    FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
+
+    --
+    -- test sizes
+    --
+    IsChunkSizeOk(4, idx, result.chunk_size, "size bytes")
+    local function TestSize(mysize, sizename, typename)
     local byte = LoadByte(chunk, idx, MoveToNextTok)
     if not config.AUTO_DETECT then
-      if byte ~= config[mysize] then
-        error(string.format("mismatch in %s size (needs %d but read %d)",
-          sizename, config[mysize], byte))
-      end
+        if byte ~= config[mysize] then
+            error(string.format("mismatch in %s size (needs %d but read %d)",
+                  sizename, config[mysize], byte))
+        end
     else
-      config[mysize] = byte
+        config[mysize] = byte
     end
     FormatLine(chunk, 1, string.format("size of %s (%s)", sizename, typename), previdx)
-  end
-  -- byte sizes
-  TestSize("size_int", "int", "bytes")
-  TestSize("size_size_t", "size_t", "bytes")
-  TestSize("size_Instruction", "Instruction", "bytes")
-  TestSize("size_lua_Number", "number", "bytes")
-  -- initialize decoder (see the 5.0.2 script if you want to customize
-  -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
-  DecodeInit()
-
-  --
-  -- test integral flag (5.1)
-  --
-  IsChunkSizeOk(1, idx, result.chunk_size, "integral byte")
-  SetLuaIntegral(LoadByte(chunk, idx, MoveToNextTok))
-  FormatLine(chunk, 1, "integral (1=integral)", previdx)
-
-  --
-  -- verify or determine lua_Number type
-  --
-  local num_id = GetLuaNumberSize() .. GetLuaIntegral()
-  if not config.AUTO_DETECT then
-    if GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
-      error("incorrect lua_Number format or bad test number")
     end
-  else
-    -- look for a number type match in our table
-    SetLuaNumberType(nil)
-    for i, v in pairs(LUANUMBER_ID) do
-      if num_id == i then SetLuaNumberType(v) end
+    -- byte sizes
+    TestSize("size_int", "int", "bytes")
+    TestSize("size_size_t", "size_t", "bytes")
+    TestSize("size_Instruction", "Instruction", "bytes")
+    TestSize("size_lua_Number", "number", "bytes")
+    -- initialize decoder (see the 5.0.2 script if you want to customize
+    -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
+    DecodeInit()
+
+    --
+    -- test integral flag (5.1)
+    --
+    IsChunkSizeOk(1, idx, result.chunk_size, "integral byte")
+    SetLuaIntegral(LoadByte(chunk, idx, MoveToNextTok))
+    FormatLine(chunk, 1, "integral (1=integral)", previdx)
+
+    --
+    -- verify or determine lua_Number type
+    --
+    local num_id = GetLuaNumberSize() .. GetLuaIntegral()
+    if not config.AUTO_DETECT then
+        if GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
+            error("incorrect lua_Number format or bad test number")
+        end
+    else
+        -- look for a number type match in our table
+        SetLuaNumberType(nil)
+        for i, v in pairs(LUANUMBER_ID) do
+            if num_id == i then SetLuaNumberType(v) end
+        end
+        if not GetLuaNumberType() then
+            error("unrecognized lua_Number type")
+        end
     end
-    if not GetLuaNumberType() then
-      error("unrecognized lua_Number type")
-    end
-  end
-  DescLine("* number type: "..GetLuaNumberType())
+    DescLine("* number type: "..GetLuaNumberType())
 
-  init_scope_config_description()
-  DescLine("* "..GetLuaDescription())
-  if ShouldIPrintBrief() then WriteLine(GetOutputComment()..GetLuaDescription()) end
-  -- end of global header
-  stat.header = idx - 1
-  DisplayStat("* global header = "..stat.header.." bytes")
-  DescLine("** global header end **")
+    init_scope_config_description()
+    DescLine("* "..GetLuaDescription())
+    if ShouldIPrintBrief() then WriteLine(GetOutputComment()..GetLuaDescription()) end
+    -- end of global header
+    stat.header = idx - 1
+    DisplayStat("* global header = "..stat.header.." bytes")
+    DescLine("** global header end **")
 
 
-  --
-  -- actual call to start the function loading process
-  --
-  result.func = LoadFunction(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-  DescFunction(chunk, result.func, 0, 1)
-  stat.total = idx - 1
-  DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
-  result.stat = stat
-  FormatLine(chunk, 0, "** end of chunk **", idx)
-  return result
-  -- end of Dechunk
+    --
+    -- actual call to start the function loading process
+    --
+    result.func = LoadFunction(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+    DescFunction(chunk, result.func, 0, 1)
+    stat.total = idx - 1
+    DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
+    result.stat = stat
+    FormatLine(chunk, 0, "** end of chunk **", idx)
+    return result
+    -- end of Dechunk
 end
