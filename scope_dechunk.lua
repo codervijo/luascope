@@ -607,6 +607,38 @@ function CheckFormat(size, idx, chunk, func_movetonext)
     return format
 end
 
+function CheckEndianness(size, idx, chunk, func_movetonext)
+    IsChunkSizeOk(1, idx, size, "endianness byte")
+    local endianness = LoadByte(chunk, idx, func_movetonext)
+    if not config.AUTO_DETECT then
+        if endianness ~= GetLuaEndianness() then
+            error(string.format("unsupported endianness %s vs %s",
+                  endianness, GetLuaEndianness()))
+        end
+    else
+        SetLuaEndianness(endianness)
+    end
+    return endianness
+end
+
+function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, typename)
+    IsChunkSizeOk(4, idx, size, "size bytes")
+    local byte = LoadByte(chunk, idx, func_movetonext)
+    if not config.AUTO_DETECT then
+        if byte ~= config[mysize] then
+            error(string.format("mismatch in %s size (needs %d but read %d)",
+                  sizename, config[mysize], byte))
+        end
+    else
+        config[mysize] = byte
+    end
+end
+
+function CheckIntegral(size, idx, chunk, func_movetonext)
+    IsChunkSizeOk(1, idx, size, "integral byte")
+    SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
+end
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -678,38 +710,25 @@ function Dechunk(chunk_name, chunk)
     --
     -- test endianness
     --
-    IsChunkSizeOk(1, idx, result.chunk_size, "endianness byte")
-    local endianness = LoadByte(chunk, idx, MoveToNextTok)
-    if not config.AUTO_DETECT then
-        if endianness ~= GetLuaEndianness() then
-            error(string.format("unsupported endianness %s vs %s", endianness, GetLuaEndianness()))
-        end
-    else
-        SetLuaEndianness(endianness)
-    end
+    endianness = CheckEndianness(result.chunk_size, idx, chunk, MoveToNextTok)
     FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
 
     --
     -- test sizes
     --
-    IsChunkSizeOk(4, idx, result.chunk_size, "size bytes")
-    local function TestSize(mysize, sizename, typename)
-    local byte = LoadByte(chunk, idx, MoveToNextTok)
-    if not config.AUTO_DETECT then
-        if byte ~= config[mysize] then
-            error(string.format("mismatch in %s size (needs %d but read %d)",
-                  sizename, config[mysize], byte))
-        end
-    else
-        config[mysize] = byte
-    end
-    FormatLine(chunk, 1, string.format("size of %s (%s)", sizename, typename), previdx)
-    end
     -- byte sizes
-    TestSize("size_int", "int", "bytes")
-    TestSize("size_size_t", "size_t", "bytes")
-    TestSize("size_Instruction", "Instruction", "bytes")
-    TestSize("size_lua_Number", "number", "bytes")
+    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "int", "bytes"),
+               previdx)
+    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "size_t", "bytes"),
+               previdx)
+    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "Instruction", "bytes"),
+               previdx)
+    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "number", "bytes"),
+               previdx)
     -- initialize decoder (see the 5.0.2 script if you want to customize
     -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
     DecodeInit()
@@ -717,8 +736,7 @@ function Dechunk(chunk_name, chunk)
     --
     -- test integral flag (5.1)
     --
-    IsChunkSizeOk(1, idx, result.chunk_size, "integral byte")
-    SetLuaIntegral(LoadByte(chunk, idx, MoveToNextTok))
+    CheckIntegral(result.chunk_size, idx, chunk, MoveToNextTok)
     FormatLine(chunk, 1, "integral (1=integral)", previdx)
 
     --
