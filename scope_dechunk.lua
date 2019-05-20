@@ -639,6 +639,109 @@ function CheckIntegral(size, idx, chunk, func_movetonext)
     SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
 end
 
+function CheckLuaNumber()
+    local num_id = GetLuaNumberSize() .. GetLuaIntegral()
+    if not config.AUTO_DETECT then
+        if GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
+            error("incorrect lua_Number format or bad test number")
+        end
+    else
+        -- look for a number type match in our table
+        SetLuaNumberType(nil)
+        for i, v in pairs(LUANUMBER_ID) do
+            if num_id == i then SetLuaNumberType(v) end
+        end
+        if not GetLuaNumberType() then
+            error("unrecognized lua_Number type")
+        end
+    end
+end
+
+function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_movetonext)
+    local function MoveToNextTok(size)
+        previdx = idx
+        idx = idx + size
+    end
+
+    local function MoveIdxLen(len)
+        idx = idx + len
+    end
+
+    --
+    -- initialize listing display
+    --
+    OutputHeader(size, name, chunk, idx)
+
+    --
+    -- test signature
+    --
+    len = CheckSignature(size, idx, chunk)
+    FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
+    idx = idx + len
+
+    --
+    -- test version
+    --
+    result.version = CheckVersion(size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
+
+    --
+    -- test format (5.1)
+    -- * Dechunk does not accept anything other than 0. For custom
+    -- * binary chunks, modify Dechunk to read it properly.
+    --
+    result.format = CheckFormat(size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "format (0=official)", previdx)
+
+    --
+    -- test endianness
+    --
+    endianness = CheckEndianness(size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
+
+    --
+    -- test sizes
+    --
+    -- byte sizes
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "int", "bytes"),
+               previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "size_t", "bytes"),
+               previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "Instruction", "bytes"),
+               previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes")
+    FormatLine(chunk, 1, string.format("size of %s (%s)", "number", "bytes"),
+               previdx)
+    -- initialize decoder (see the 5.0.2 script if you want to customize
+    -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
+    DecodeInit()
+
+    --
+    -- test integral flag (5.1)
+    --
+    CheckIntegral(size, idx, chunk, MoveToNextTok)
+    FormatLine(chunk, 1, "integral (1=integral)", previdx)
+
+    --
+    -- verify or determine lua_Number type
+    --
+    CheckLuaNumber()
+    DescLine("* number type: "..GetLuaNumberType())
+
+    init_scope_config_description()
+    DescLine("* "..GetLuaDescription())
+    if ShouldIPrintBrief() then WriteLine(GetOutputComment()..GetLuaDescription()) end
+    -- end of global header
+    stat.header = idx - 1
+    DisplayStat("* global header = "..stat.header.." bytes")
+    DescLine("** global header end **")
+
+    return idx, previdx
+end
+
 --[[
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
@@ -657,22 +760,6 @@ function Dechunk(chunk_name, chunk)
     result.chunk_name = chunk_name or ""
     result.chunk_size = string.len(chunk)
 
-    local function MoveToNextTok(size)
-        previdx = idx
-        idx = idx + size
-    end
-
-    local function MoveIdxLen(len)
-        idx = idx + len
-    end
-
-
-    --
-    -- * WARNING this will fail for large long longs (64-bit numbers)
-    --   because long longs exceeds the precision of doubles.
-    --
-    convert_to["long long"] = convert_to["int"]
-
     --[[-------------------------------------------------------------------
     -- Display support functions
     -- * considerable work is done to maintain nice alignments
@@ -680,93 +767,7 @@ function Dechunk(chunk_name, chunk)
     -- * this is meant to make output customization easy
     --]]-------------------------------------------------------------------
 
-
-    --
-    -- initialize listing display
-    --
-    OutputHeader(result.chunk_size, result.chunk_name, chunk, idx)
-
-    --
-    -- test signature
-    --
-    len = CheckSignature(result.chunk_size, idx, chunk)
-    FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
-    idx = idx + len
-
-    --
-    -- test version
-    --
-    result.version = CheckVersion(result.chunk_size, idx, chunk, MoveToNextTok)
-    FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
-
-    --
-    -- test format (5.1)
-    -- * Dechunk does not accept anything other than 0. For custom
-    -- * binary chunks, modify Dechunk to read it properly.
-    --
-    result.format = CheckFormat(result.chunk_size, idx, chunk, MoveToNextTok)
-    FormatLine(chunk, 1, "format (0=official)", previdx)
-
-    --
-    -- test endianness
-    --
-    endianness = CheckEndianness(result.chunk_size, idx, chunk, MoveToNextTok)
-    FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
-
-    --
-    -- test sizes
-    --
-    -- byte sizes
-    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes")
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "int", "bytes"),
-               previdx)
-    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes")
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "size_t", "bytes"),
-               previdx)
-    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes")
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "Instruction", "bytes"),
-               previdx)
-    CheckSizes(result.chunk_size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes")
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "number", "bytes"),
-               previdx)
-    -- initialize decoder (see the 5.0.2 script if you want to customize
-    -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
-    DecodeInit()
-
-    --
-    -- test integral flag (5.1)
-    --
-    CheckIntegral(result.chunk_size, idx, chunk, MoveToNextTok)
-    FormatLine(chunk, 1, "integral (1=integral)", previdx)
-
-    --
-    -- verify or determine lua_Number type
-    --
-    local num_id = GetLuaNumberSize() .. GetLuaIntegral()
-    if not config.AUTO_DETECT then
-        if GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
-            error("incorrect lua_Number format or bad test number")
-        end
-    else
-        -- look for a number type match in our table
-        SetLuaNumberType(nil)
-        for i, v in pairs(LUANUMBER_ID) do
-            if num_id == i then SetLuaNumberType(v) end
-        end
-        if not GetLuaNumberType() then
-            error("unrecognized lua_Number type")
-        end
-    end
-    DescLine("* number type: "..GetLuaNumberType())
-
-    init_scope_config_description()
-    DescLine("* "..GetLuaDescription())
-    if ShouldIPrintBrief() then WriteLine(GetOutputComment()..GetLuaDescription()) end
-    -- end of global header
-    stat.header = idx - 1
-    DisplayStat("* global header = "..stat.header.." bytes")
-    DescLine("** global header end **")
-
+    idx, previdx = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
 
     --
     -- actual call to start the function loading process
