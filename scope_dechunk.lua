@@ -760,12 +760,12 @@ function Dechunk(chunk_name, chunk)
     result.chunk_name = chunk_name or ""
     result.chunk_size = string.len(chunk)
 
-    --[[-------------------------------------------------------------------
+    --[[
     -- Display support functions
     -- * considerable work is done to maintain nice alignments
     -- * some widths are initialized at chunk start
     -- * this is meant to make output customization easy
-    --]]-------------------------------------------------------------------
+    --]]
 
     idx, previdx = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
 
