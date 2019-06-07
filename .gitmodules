@@ -1,0 +1,3 @@
+[submodule "b2b"]
+	path = b2b
+	url = https://github.com/codervijo/b2b
