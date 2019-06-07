@@ -657,7 +657,11 @@ function CheckLuaNumber()
     end
 end
 
+-- Lua 5.1 and 5.2 Header structures are identical
+-- From lua source file lundump.c
 function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_movetonext)
+    local chunkdets = {}
+
     local function MoveToNextTok(size)
         previdx = idx
         idx = idx + size
@@ -684,6 +688,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     result.version = CheckVersion(size, idx, chunk, MoveToNextTok)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
+    chunkdets.version  = result.version
 
     --
     -- test format (5.1)
@@ -698,6 +703,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     endianness = CheckEndianness(size, idx, chunk, MoveToNextTok)
     FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
+    chunkdets.endianness = endianness
 
     --
     -- test sizes
@@ -739,7 +745,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     DisplayStat("* global header = "..stat.header.." bytes")
     DescLine("** global header end **")
 
-    return idx, previdx
+    return idx, previdx, chunkdets
 end
 
 --[[
@@ -767,7 +773,10 @@ function Dechunk(chunk_name, chunk)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
+    idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
+
+    -- Temporary check for version 5.1
+    if dets.version ~= 81 then return nil end
 
     --
     -- actual call to start the function loading process
