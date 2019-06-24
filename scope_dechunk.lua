@@ -185,7 +185,6 @@ end
 
 --
 -- displays function information
--- * decoupled from LoadFunction due to 5.1 chunk rearrangement
 --
 function DescFunction(chunk, func, num, level)
     DescLine(chunk, "")
@@ -299,17 +298,17 @@ local function LoadInt(chunk, total_size, idx, func_movetonext)
     if not x then
         error("could not load integer")
     else
-    local sum = 0
-    for i = GetLuaIntSize(), 1, -1 do
-        sum = sum * 256 + string.byte(x, i)
-    end
-    -- test for negative number
-    if string.byte(x, GetLuaIntSize()) > 127 then
-        sum = sum - math.ldexp(1, 8 * GetLuaIntSize())
-    end
-    -- from the looks of it, integers needed are positive
-    if sum < 0 then error("bad integer") end
-    return sum
+        local sum = 0
+        for i = GetLuaIntSize(), 1, -1 do
+            sum = sum * 256 + string.byte(x, i)
+        end
+        -- test for negative number
+        if string.byte(x, GetLuaIntSize()) > 127 then
+            sum = sum - math.ldexp(1, 8 * GetLuaIntSize())
+        end
+        -- from the looks of it, integers needed are positive
+        if sum < 0 then error("bad integer") end
+        return sum
     end
 end
 
@@ -513,18 +512,18 @@ end
 --
 -- this is recursively called to load the chunk or function body
 --
-function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
+function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     local func = {}
     local idx  = ix
     local previdx = pix
 
     local function MoveToNextTok(size)
-    previdx = idx
-    idx = idx + size
+        previdx = idx
+        idx = idx + size
     end
 
     local function MoveIdxLen(len)
-    idx = idx + len
+        idx = idx + len
     end
 
     -------------------------------------------------------------
@@ -534,8 +533,8 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
     local start = idx
     func.stat = {}
     local function SetStat(item)
-      func.stat[item] = idx - start
-      start = idx
+        func.stat[item] = idx - start
+        start = idx
     end
     -- source file name
     print("Loading string at "..idx)
@@ -566,17 +565,76 @@ function LoadFunction(chunk, total_size, ix, pix, funcname, num, level)
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
     -- load parts of a chunk (rearranged in 5.1)
-    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                 SetStat("code")
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                   SetStat("code")
     print "2.4"
-    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func)                   SetStat("consts")
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func) SetStat("consts")
     print "2.8"
-    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)                     SetStat("funcs")
+    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
     print "3"
-    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                 SetStat("lines")
-    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("locals")
-    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen) SetStat("upvalues")
+    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                   SetStat("lines")
+    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
+    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
+
     return func
-    -- end of LoadFunction
+    -- end of Load51Function
+end
+
+function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
+    local func = {}
+    local idx  = ix
+    local previdx = pix
+
+    local function MoveToNextTok(size)
+        previdx = idx
+        idx = idx + size
+    end
+
+    local function MoveIdxLen(len)
+        idx = idx + len
+    end
+
+    -------------------------------------------------------------
+    -- body of LoadFunction() starts here
+    -------------------------------------------------------------
+    -- statistics handler
+    local start = idx
+    func.stat = {}
+    local function SetStat(item)
+        func.stat[item] = idx - start
+        start = idx
+    end
+
+    -- line where the function was defined
+    func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Pos ".. func.linedefined)
+    func.pos_linedefined = previdx
+    func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Last line"..func.lastlinedefined)
+    print "1"
+    -------------------------------------------------------------
+    -- some byte counts
+    -------------------------------------------------------------
+    if IsChunkSizeOk(4, idx, total_size, "function header") then return end
+    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    SetStat("header")
+    print("Num params"..func.numparams)
+    print("Max stack size"..func.maxstacksize)
+    print "2"
+
+    -- load parts of a chunk
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                   SetStat("code")
+    print "2.4"
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func) SetStat("consts")
+    print "2.8"
+    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
+    print "3"
+    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                   SetStat("lines")
+    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
+    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
+
+    return func
 end
 
 function CheckSignature(size, idx, chunk)
@@ -585,6 +643,7 @@ function CheckSignature(size, idx, chunk)
     if string.sub(chunk, 1, len) ~= config.SIGNATURE then
         error("header signature not found, this is not a Lua chunk")
     end
+
     return len
 end
 
@@ -595,6 +654,7 @@ function CheckVersion(size, idx, chunk, func_movetonext)
         --error(string.format("Dechunk cannot read version %02X chunks", ver))
         print(string.format("Dechunk cannot read version %02X chunks", ver))
     end
+
     return ver
 end
 
@@ -604,6 +664,7 @@ function CheckFormat(size, idx, chunk, func_movetonext)
     if format ~= config.FORMAT then
         error(string.format("Dechunk cannot read format %02X chunks", format))
     end
+
     return format
 end
 
@@ -775,18 +836,27 @@ function Dechunk(chunk_name, chunk)
 
     idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
 
-    -- Temporary check for version 5.1
-    if dets.version ~= 81 then return nil end
+    if dets.version == 81 then
+        --
+        --  Lua version 5.1
+        --
+        -- actual call to start the function loading process
+        --
+        result.func = Load51Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, result.func, 0, 1)
+        stat.total = idx - 1
+        DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
+        result.stat = stat
+        FormatLine(chunk, 0, "** end of chunk **", idx)
+    elseif dets.version == 82 then
+        --
+        --  Lua Version 5.2
+        --
+        print "Found Lua 52 chucnk"
+        result.func = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, result.func, 0, 1)
+    end
 
-    --
-    -- actual call to start the function loading process
-    --
-    result.func = LoadFunction(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-    DescFunction(chunk, result.func, 0, 1)
-    stat.total = idx - 1
-    DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
-    result.stat = stat
-    FormatLine(chunk, 0, "** end of chunk **", idx)
     return result
     -- end of Dechunk
 end
