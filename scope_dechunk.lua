@@ -189,8 +189,7 @@ end
 function DescFunction(chunk, func, num, level)
     DescLine(chunk, "")
     BriefLine("")
-    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")",
-    func.pos_source)
+    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")", func.pos_source)
     BriefLine("; function ["..num.."] definition (level "..level..")")
     DescLine(chunk, "** start of function **")
 
@@ -357,11 +356,13 @@ local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         if len == 0 then        -- there is no error, return a nil
             return nil
         end
+        idx = idx + GetLuaSizetSize() -- idx was incremented in our caller
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
-        local s = string.sub(chunk, idx, idx + len - 2)
+        local s = string.sub(chunk, idx, idx + len )
         func_moveidx(len)
         print("Loading string at idx "..idx.. " of length "..len .. ">"..s.."<")
+        Hexdump(s)
         return s
     end
 end
@@ -377,14 +378,17 @@ local function SizeLoadString(chunk, total_size, idx)
         if len == 0 then        -- there is no error, return a nil
             return 0
         end
+        idx = idx + GetLuaSizetSize() -- idx was incremented in our caller
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
-        --local s = string.sub(chunk, idx, idx + len - 2)
-        print("Size of String to Load at idx "..idx.. " of length "..len)
+        local s = string.sub(chunk, idx, idx + len)
+        print("Size of String to Load at idx "..idx.. " of length "..len..s)
+        Hexdump(s)
         --return s
         return len
     end
 end
+
 --
 -- load line information
 --
@@ -446,7 +450,7 @@ end
 --
 local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, func)
     local size = LoadInt(chunk, total_size, idx, func_movetonext)
-    print("Loading code of Size", size)
+    print("Loading instructions of Size", size)
     func.pos_code = previdx
     func.code = {}
     func.sizecode = size
@@ -536,11 +540,13 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
         func.stat[item] = idx - start
         start = idx
     end
+
     -- source file name
     print("Loading string at "..idx)
     func.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
     func.pos_source = previdx
     if func.source == "" and level == 1 then func.source = funcname end
+
     -- line where the function was defined
     print("Func source:" .. func.source)
     func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
@@ -549,6 +555,7 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
     print("Last line"..func.lastlinedefined)
     print "1"
+
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
@@ -561,6 +568,7 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     print("Num params"..func.numparams)
     print("Max stack size"..func.maxstacksize)
     print "2"
+
     -------------------------------------------------------------
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
@@ -579,6 +587,7 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     -- end of Load51Function
 end
 
+-- References : lundump.[ch], http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
 function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     local func = {}
     local idx  = ix
@@ -593,6 +602,19 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
         idx = idx + len
     end
 
+    local function Check52Signature(size, idx, chunk)
+        local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
+
+        len = string.len(lua52signature)
+        IsChunkSizeOk(len, idx, size, "lua52 signature")
+
+        if string.sub(chunk, idx, len) ~= lua52signature then
+            print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
+        end
+
+        return idx+len
+    end
+
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
@@ -603,14 +625,19 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
         func.stat[item] = idx - start
         start = idx
     end
+    print("Loading string at "..idx)
+    Hexdump(chunk)
+    previdx = idx
+    idx = Check52Signature(total_size, idx, chunk)
 
     -- line where the function was defined
     func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Pos ".. func.linedefined)
+    print("Pos :".. func.linedefined)
     func.pos_linedefined = previdx
     func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Last line"..func.lastlinedefined)
+    print("Last line :"..func.lastlinedefined)
     print "1"
+
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
@@ -619,8 +646,8 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
     func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
     SetStat("header")
-    print("Num params"..func.numparams)
-    print("Max stack size"..func.maxstacksize)
+    print("Num params :"..func.numparams)
+    print("Max stack size :"..func.maxstacksize)
     print "2"
 
     -- load parts of a chunk
@@ -635,6 +662,7 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
 
     return func
+    -- end of Load52Function
 end
 
 function CheckSignature(size, idx, chunk)
