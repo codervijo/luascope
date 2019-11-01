@@ -56,32 +56,32 @@ end
 --
 -- describe line information
 --
-local function DescLines(chunk, func)
-    local size = func.sizelineinfo
-    local pos = func.pos_lineinfo
+local function DescLines(chunk, desc)
+    local size = desc.sizelineinfo
+    local pos = desc.pos_lineinfo
     DescLine("* lines:")
     FormatLine(chunk, GetLuaIntSize(), "sizelineinfo ("..size..")", pos)
     pos = pos + GetLuaIntSize()
     local WIDTH = WidthOf(size)
     DescLine("[pc] (line)")
     for i = 1, size do
-        local s = string.format("[%s] (%s)", ZeroPad(i, WIDTH), func.lineinfo[i])
+        local s = string.format("[%s] (%s)", ZeroPad(i, WIDTH), desc.lineinfo[i])
         FormatLine(chunk, GetLuaIntSize(), s, pos)
-        pos = pos + GetLuaIntSize()
+        pos = pos + GetLuadescdescIntSize()
     end
     -- mark significant lines in source listing
-    SourceMark(func)
+    SourceMark(desc)
 end
 
 --
 -- describe locals information
 --
-local function DescLocals(chunk, func)
-    local n = func.sizelocvars
+local function DescLocals(chunk, desc)
+    local n = desc.sizelocvars
     DescLine(chunk, "* locals:")
-    FormatLine(chunk, GetLuaIntSize(), "sizelocvars ("..n..")", func.pos_locvars)
+    FormatLine(chunk, GetLuaIntSize(), "sizelocvars ("..n..")", desc.pos_locvars)
     for i = 1, n do
-        local locvar = func.locvars[i]
+        local locvar = desc.locvars[i]
         DescString(chunk, locvar.varname, locvar.pos_varname)
         DescLine(chunk, "local ["..(i - 1).."]: "..EscapeString(locvar.varname))
         BriefLine(".local"..GetOutputSep()..EscapeString(locvar.varname, 1)
@@ -94,13 +94,13 @@ end
 --
 -- describe upvalues information
 --
-local function DescUpvalues(chunk, func)
-    local n = func.sizeupvalues
+local function DescUpvalues(chunk, descdesc)
+    local n = descdesc.sizeupvalues
     DescLine(chunk, "* upvalues:")
-    FormatLine(chunk, GetLuaIntSize(), "sizeupvalues ("..n..")", func.pos_upvalues)
+    FormatLine(chunk, GetLuaIntSize(), "sizeupvalues ("..n..")", descdesc.pos_upvalues)
     for i = 1, n do
-        local upvalue = func.upvalues[i]
-        DescString(chunk, upvalue, func.posupvalues[i])
+        local upvalue = descdesc.upvalues[i]
+        DescString(chunk, upvalue, descdesc.posupvalues[i])
         DescLine(chunk, "upvalue ["..(i - 1).."]: "..EscapeString(upvalue))
         BriefLine(".upvalue"..GetOutputSep()..EscapeString(upvalue, 1)
                     ..GetOutputSep()..GetOutputComment()..(i - 1))
@@ -110,16 +110,16 @@ end
 --
 -- describe constants information (data)
 --
-local function DescConstantKs(chunk, func)
-    local n = func.sizek
-    local pos = func.pos_ks
+local function DescConstantKs(chunk, desc)
+    local n = desc.sizek
+    local pos = desc.pos_ks
     DescLine(chunk, "* constants:")
     FormatLine(chunk, GetLuaIntSize(), "sizek ("..n..")", pos)
     for i = 1, n do
-        local posk = func.posk[i]
+        local posk = desc.posk[i]
         local CONST = "const ["..(i - 1).."]: "
         local CONSTB = GetOutputSep()..GetOutputComment()..(i - 1)
-        local k = func.k[i]
+        local k = desc.k[i]
         if type(k) == "number" then
             FormatLine(chunk,1, "const type "..GetTypeNumber(), posk)
             FormatLine(chunk, GetLuaNumberSize(), CONST.."("..k..")", posk + 1)
@@ -144,13 +144,13 @@ end
 --
 -- describe constants information (local functions)
 --
-local function DescConstantPs(chunk, func)
-    local n = func.sizep
+local function DescConstantPs(chunk, descdesc)
+    local n = descdesc.sizep
     DescLine(chunk,"* functions:")
-    FormatLine(chunk, GetLuaIntSize(), "sizep ("..n..")", func.pos_ps)
+    FormatLine(chunk, GetLuaIntSize(), "sizep ("..n..")", descdesc.pos_ps)
     for i = 1, n do
         -- recursive call back on itself, next level
-        DescFunction(chunk,func.p[i], i - 1, level + 1)
+        DescFunction(chunk,descdesc.p[i], i - 1, level + 1)
     end
 end
 
@@ -158,25 +158,25 @@ end
 -- describe function code
 -- * inst decode subfunctions: DecodeInst() and DescribeInst()
 --
-local function DescCode(chunk, func)
-    local size = func.sizecode
-    local pos = func.pos_code
+local function DescCode(chunk, desc)
+    local size = desc.sizecode
+    local pos = desc.pos_code
     DescLine(chunk,"* code:")
     FormatLine(chunk, GetLuaIntSize(), "sizecode ("..size..")", pos)
     pos = pos + GetLuaIntSize()
-    func.inst = {}
+    desc.inst = {}
     local ISIZE = WidthOf(size)
     for i = 1, size do
-        func.inst[i] = {}
+        desc.inst[i] = {}
     end
     for i = 1, size do
-        DecodeInst(func.code[i], func.inst[i])
-        local inst = func.inst[i]
+        DecodeInst(desc.code[i], desc.inst[i])
+        local inst = desc.inst[i]
         -- compose instruction: opcode operands [; comments]
-        local d = DescribeInst(inst, i, func)
+        local d = DescribeInst(inst, i, desc)
         d = string.format("[%s] %s", ZeroPad(i, ISIZE), d)
         -- source code insertion
-        SourceMerge(func, i)
+        SourceMerge(desc, i)
         FormatLine(chunk, GetLuaInstructionSize(), d, pos)
         BriefLine(d)
         pos = pos + GetLuaInstructionSize()
@@ -186,71 +186,71 @@ end
 --
 -- displays function information
 --
-function DescFunction(chunk, func, num, level)
+function DescFunction(chunk, desc, num, level)
     DescLine(chunk, "")
     BriefLine("")
-    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")", func.pos_source)
+    FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")", desc.pos_source)
     BriefLine("; function ["..num.."] definition (level "..level..")")
     DescLine(chunk, "** start of function **")
 
     -- source file name
-    DescString(chunk, func.source, func.pos_source)
-    if func.source == nil then
+    DescString(chunk, desc.source, desc.pos_source)
+    if desc.source == nil then
         DescLine(chunk, "source name: (none)")
     else
-        DescLine(chunk, "source name: "..EscapeString(func.source))
+        DescLine(chunk, "source name: "..EscapeString(desc.source))
     end
 
     -- optionally initialize source listing merging
-    SourceInit(func.source)
+    SourceInit(desc.source)
 
     -- line where the function was defined
-    local pos = func.pos_linedefined
-    FormatLine(chunk, GetLuaIntSize(), "line defined ("..func.linedefined..")", pos)
+    local pos = desc.pos_linedefined
+    FormatLine(chunk, GetLuaIntSize(), "line defined ("..desc.linedefined..")", pos)
     pos = pos + GetLuaIntSize()
-    FormatLine(chunk, GetLuaIntSize(), "last line defined ("..func.lastlinedefined..")", pos)
+    FormatLine(chunk, GetLuaIntSize(), "last line defined ("..desc.lastlinedefined..")", pos)
     pos = pos + GetLuaIntSize()
 
     -- display byte counts
-    FormatLine(chunk, 1, "nups ("..func.nups..")", pos)
-    FormatLine(chunk, 1, "numparams ("..func.numparams..")", pos + 1)
-    FormatLine(chunk, 1, "is_vararg ("..func.is_vararg..")", pos + 2)
-    FormatLine(chunk, 1, "maxstacksize ("..func.maxstacksize..")", pos + 3)
+    FormatLine(chunk, 1, "nups ("..desc.nups..")", pos)
+    FormatLine(chunk, 1, "numparams ("..desc.numparams..")", pos + 1)
+    FormatLine(chunk, 1, "is_vararg ("..desc.is_vararg..")", pos + 2)
+    FormatLine(chunk, 1, "maxstacksize ("..desc.maxstacksize..")", pos + 3)
     BriefLine(string.format("; %d upvalues, %d params, %d stacks",
-    func.nups, func.numparams, func.maxstacksize))
+    desc.nups, desc.numparams, desc.maxstacksize))
     BriefLine(string.format(".function%s%d %d %d %d", GetOutputSep(),
-    func.nups, func.numparams, func.is_vararg, func.maxstacksize))
+    desc.nups, desc.numparams, desc.is_vararg, desc.maxstacksize))
 
     -- display parts of a chunk
     if ShouldIPrintParts() then
-        DescLines(chunk,func)       -- brief displays 'declarations' first
-        DescLocals(chunk, func)
-        DescUpvalues(chunk, func)
-        DescConstantKs(chunk, func)
-        DescConstantPs(chunk, func)
-        DescCode(chunk, func)
+        DescLines(chunk,desc)       -- brief displays 'declarations' first
+        DescLocals(chunk, desc)
+        DescUpvalues(chunk, desc)
+        DescConstantKs(chunk, desc)
+        DescConstantPs(chunk, desc)
+        DescCode(chunk, desc)
     else
-        DescCode(chunk, func)        -- normal displays positional order
-        DescConstantKs(chunk, func)
-        DescConstantPs(chunk, func)
-        DescLines(chunk,func)
-        DescLocals(chunk, func)
-        DescUpvalues(chunk, func)
+        DescCode(chunk, desc)        -- normal displays positional order
+        DescConstantKs(chunk, desc)
+        DescConstantPs(chunk, desc)
+        DescLines(chunk,desc)
+        DescLocals(chunk, desc)
+        DescUpvalues(chunk, desc)
     end
 
     -- show function statistics block
-    DisplayStat("* func header   = "..func.stat.header.." bytes")
-    DisplayStat("* lines size    = "..func.stat.lines.." bytes")
-    DisplayStat("* locals size   = "..func.stat.locals.." bytes")
-    DisplayStat("* upvalues size = "..func.stat.upvalues.." bytes")
-    DisplayStat("* consts size   = "..func.stat.consts.." bytes")
-    DisplayStat("* funcs size    = "..func.stat.funcs.." bytes")
-    DisplayStat("* code size     = "..func.stat.code.." bytes")
-    func.stat.total = func.stat.header + func.stat.lines +
-    func.stat.locals + func.stat.upvalues +
-    func.stat.consts + func.stat.funcs +
-    func.stat.code
-    DisplayStat(chunk, "* TOTAL size    = "..func.stat.total.." bytes")
+    DisplayStat("* func header   = "..desc.stat.header.." bytes")
+    DisplayStat("* lines size    = "..desc.stat.lines.." bytes")
+    DisplayStat("* locals size   = "..desc.stat.locals.." bytes")
+    DisplayStat("* upvalues size = "..desc.stat.upvalues.." bytes")
+    DisplayStat("* consts size   = "..desc.stat.consts.." bytes")
+    DisplayStat("* funcs size    = "..desc.stat.funcs.." bytes")
+    DisplayStat("* code size     = "..desc.stat.code.." bytes")
+    desc.stat.total = desc.stat.header + desc.stat.lines +
+    desc.stat.locals + desc.stat.upvalues +
+    desc.stat.consts + desc.stat.funcs +
+    desc.stat.code
+    DisplayStat(chunk, "* TOTAL size    = "..desc.stat.total.." bytes")
     DescLine(chunk, "** end of function **\n")
     BriefLine("; end of function\n")
 end
@@ -287,6 +287,20 @@ local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
     else-- reverse bytes if big endian
         return string.reverse(b)
     end
+end
+
+--
+-- loads a number (can be zero) - loadInt can't load zero - used by 5.2
+--
+local function LoadNo(chunk, total_size, idx, func_movetonext)
+    local x = LoadBlock(GetLuaIntSize(), chunk, total_size, idx, func_movetonext)
+
+    if x == nil then return 0 end
+    local sum = 0
+    for i = GetLuaIntSize(), 1, -1 do
+        sum = sum * 256 + string.byte(x, i)
+    end
+    return sum
 end
 
 --
@@ -392,25 +406,25 @@ end
 --
 -- load line information
 --
-local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, func)
+local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, desc)
     local size = LoadInt(chunk, total_size, idx, func_movetonext)
-    func.pos_lineinfo = previdx
-    print("VCVCVC Loading lines "..previdx..func.pos_lineinfo)
-    func.lineinfo = {}
-    func.sizelineinfo = size
+    desc.pos_lineinfo = previdx
+    print("VCVCVC Loading lines "..previdx..desc.pos_lineinfo)
+    desc.lineinfo = {}
+    desc.sizelineinfo = size
     for i = 1, size do
-        func.lineinfo[i] = LoadInt(chunk, total_size, idx, func_movetonext)
+        desc.lineinfo[i] = LoadInt(chunk, total_size, idx, func_movetonext)
     end
 end
 
 --
 -- load locals information
 --
-local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, descdescdesc, func_moveidx)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    func.pos_locvars = previdx
-    func.locvars = {}
-    func.sizelocvars = n
+    descdescdesc.pos_locvars = previdx
+    descdescdesc.locvars = {}
+    descdescdesc.sizelocvars = n
     for i = 1, n do
         local locvar = {}
         locvar.varname = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
@@ -418,28 +432,69 @@ local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, func
         locvar.startpc = LoadInt(chunk, total_size, idx, func_movetonext)
         locvar.pos_startpc = previdx
         locvar.endpc = LoadInt(chunk, total_size, idx, func_movetonext)
-        locvar.pos_endpc = previdx
-        func.locvars[i] = locvar
+        lodescdescdesccvar.pos_endpc = previdx
+        descdescdesc.locvars[i] = locvar
     end
+end
+
+--
+-- load function prototypes information (Used in 5.2)
+--
+local function LoadFuncProto(chunk, total_size, idx, previdx, func_movetonext, descdesc, func_moveidx)
+    local n = LoadNo(chunk, total_size, idx, func_movetonext)
+    --if n > 1 then
+        --error(string.format("bad Function prototypes: read %d, expected %d", n, func.nups))
+        --return
+    --end
+    print("No of Function prototypes:", n)
+    --func.pos_upvalues = previdx
+    --func.upvalues = {}
+    --func.sizeupvalues = n
+    --func.posupvalues = {}
+    --for i = 1, n do
+    --    func.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+    --    func.posupvalues[i] = previdx
+    --    if not func.upvalues[i] then
+    --        error("empty string at index "..(i - 1).."in upvalue table")
+    --    end
+    --end
 end
 
 --
 -- load upvalues information
 --
-local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, func, func_moveidx)
+local function Load52Upvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    if n ~= 0 and n~= func.nups then
-        error(string.format("bad nupvalues: read %d, expected %d", n, func.nups))
+    print("No of Upvalues", n)
+    desc.pos_upvalues = previdx
+    desc.upvalues = {}
+    desc.sizeupvalues = n
+    desc.posupvalues = {}
+    local x = LoadBlock(2, chunk, total_size, idx, func_movetonext)
+    local y = 0
+    for i = 2, 1, -1 do
+        y = y * 256 + string.byte(x, i)
+    end
+    print("Read 2 bytes for upvalue", y)
+end
+
+--
+-- load upvalues information
+--
+local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    if n ~= 0 and n~= desc.nups then
+        error(string.format("bad nupvalues: read %d, expected %d", n, desc.nups))
         return
     end
-    func.pos_upvalues = previdx
-    func.upvalues = {}
-    func.sizeupvalues = n
-    func.posupvalues = {}
+    desc.pos_upvalues = previdx
+    desc.upvalues = {}
+    desc.sizeupvalues = n
+    desc.posdescupvalues = {}
     for i = 1, n do
-        func.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
-        func.posupvalues[i] = previdx
-        if not func.upvalues[i] then
+        desc.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        desc.posupvalues[i] = previdx
+        if not desc.upvalues[i] then
             error("empty string at index "..(i - 1).."in upvalue table")
         end
     end
@@ -448,26 +503,26 @@ end
 --
 -- load function code
 --
-local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, func)
+local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, desc)
     local size = LoadInt(chunk, total_size, idx, func_movetonext)
     print("Loading instructions of Size", size)
-    func.pos_code = previdx
-    func.code = {}
-    func.sizecode = size
+    desc.pos_code = previdx
+    desc.code = {}
+    desc.sizecode = size
     for i = 1, size do
-        func.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, total_size, idx, func_movetonext)
+        desc.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, total_size, idx, func_movetonext)
     end
 end
 
 --
 -- load constants information (data)
 --
-local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, func)
+local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    func.pos_ks = previdx
-    func.k = {}
-    func.sizek = n
-    func.posk = {}
+    desc.pos_ks = previdx
+    desc.k = {}
+    desc.sizek = n
+    desc.posk = {}
     pidx = idx
     ix = idx + GetLuaIntSize()
     print("Loading "..n.." constants")
@@ -475,24 +530,24 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
         local t = LoadByte(chunk, ix, func_movetonext)
         pidx = pidx + 1
         ix = ix + 1
-        func.posk[i] = pidx
+        desc.posk[i] = pidx
         if t == GetTypeNumber() then
             print("Got Number")
-            func.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
+            desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
             print("Got boolan")
             local b = LoadByte(chunk, ix, func_movetonext)
             if b == 0 then b = false else b = true end
-            func.k[i] = b
+            desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string")
-            func.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
+            desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
             local strsize = SizeLoadString(chunk, total_size, ix)
             ix = ix + GetLuaSizetSize() + strsize
             pidx = pidx + GetLuaSizetSize() + strsize
         elseif t == GetTypeNIL() then
             print("NIL")
-            func.k[i] = nil
+            desc.k[i] = nil
         else
             error(i.." bad constant type "..t.." at "..previdx)
         end
@@ -502,22 +557,42 @@ end
 --
 -- load constants information (local functions)
 --
-local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, func)
+local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, descdesc)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    func.pos_ps = previdx
-    func.p = {}
-    func.sizep = n
+    descdesc.pos_ps = previdx
+    descdesc.p = {}
+    descdesc.sizep = n
     for i = 1, n do
-        -- recursive call back on itself, next level
-        func.p[i] = LoadFunction(chunk, total_size, idx, previdx, func.source, i - 1, level + 1)
+        -- recursive call back on itself, next leveldescdesc
+        desc.p[i] = LoadFunction(chunk, total_size, idx, previdx, descdesc.source, i - 1, level + 1)
     end
+end
+
+--
+-- load debug information (used in Lua 5.2)
+-- TODO: DOESN'T WORK
+--
+local function LoadDebug(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
+    desc.source = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+    print("Source code: ", desc.source)
+    --print("Source code length:", g)
+    --local h = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    --print("Next 4 bytes:", h)
+    --LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
+
+    local i = LoadInt(chunk, total_size, idx, func_movetonext)
+    print("Next 4 bytes:", i)
+    local j = LoadNo(chunk, total_size, idx, func_movetonext)
+    print("Next 4 bytes:", j)
+    local k = LoadNo(chunk, total_size, idx, func_movetonext)
+    print("Next 4 bytes:", k)
 end
 
 --
 -- this is recursively called to load the chunk or function body
 --
 function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
-    local func = {}
+    local desc = {}
     local idx  = ix
     local previdx = pix
 
@@ -535,61 +610,61 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     -------------------------------------------------------------
     -- statistics handler
     local start = idx
-    func.stat = {}
+    desc.stat = {}
     local function SetStat(item)
-        func.stat[item] = idx - start
+        desc.stat[item] = idx - start
         start = idx
     end
 
     -- source file name
     print("Loading string at "..idx)
-    func.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
-    func.pos_source = previdx
-    if func.source == "" and level == 1 then func.source = funcname end
+    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    desc.pos_source = previdx
+    if desc.source == "" and level == 1 then desc.source = funcname end
 
     -- line where the function was defined
-    print("Func source:" .. func.source)
-    func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Pos ".. func.linedefined)
-    func.pos_linedefined = previdx
-    func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Last line"..func.lastlinedefined)
+    print("Func source:" .. desc.source)
+    desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Pos ".. desc.linedefined)
+    desc.pos_linedefined = previdx
+    desc.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Last line"..desc.lastlinedefined)
     print "1"
 
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
-    func.nups = LoadByte(chunk, idx, MoveToNextTok)
-    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    desc.nups = LoadByte(chunk, idx, MoveToNextTok)
+    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
     SetStat("header")
-    print("Num params"..func.numparams)
-    print("Max stack size"..func.maxstacksize)
+    print("Num params"..desc.numparams)
+    print("Max stack size"..desc.maxstacksize)
     print "2"
 
     -------------------------------------------------------------
     -- these are lists, LoadConstantPs() may be recursive
     -------------------------------------------------------------
     -- load parts of a chunk (rearranged in 5.1)
-    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                   SetStat("code")
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
     print "2.4"
-    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func) SetStat("consts")
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
     print "2.8"
-    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
+    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,desc)              SetStat("funcs")
     print "3"
-    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                   SetStat("lines")
-    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
-    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
+    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,desc)                   SetStat("lines")
+    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)     SetStat("locals")
+    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
 
-    return func
+    return desc
     -- end of Load51Function
 end
 
 -- References : lundump.[ch], http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
 function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
-    local func = {}
+    local desc = {}
     local idx  = ix
     local previdx = pix
 
@@ -620,9 +695,9 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     -------------------------------------------------------------
     -- statistics handler
     local start = idx
-    func.stat = {}
+    desc.stat = {}
     local function SetStat(item)
-        func.stat[item] = idx - start
+        desc.stat[item] = idx - start
         start = idx
     end
     print("Loading string at "..idx)
@@ -631,37 +706,67 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     idx = Check52Signature(total_size, idx, chunk)
 
     -- line where the function was defined
-    func.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Pos :".. func.linedefined)
-    func.pos_linedefined = previdx
-    func.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Last line :"..func.lastlinedefined)
+    desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Pos :".. desc.linedefined)
+    desc.pos_linedefined = previdx
+    desc.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Last line :"..desc.lastlinedefined)
     print "1"
 
     -------------------------------------------------------------
     -- some byte counts
-    -------------------------------------------------------------
+    --------------------desc-----------------------------------------
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
-    func.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    func.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    func.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
     SetStat("header")
-    print("Num params :"..func.numparams)
-    print("Max stack size :"..func.maxstacksize)
+    print("Num params :"..desc.numparams)
+    print("Max stack size :"..desc.maxstacksize)
     print "2"
 
     -- load parts of a chunk
-    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, func)                   SetStat("code")
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
     print "2.4"
-    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, func) SetStat("consts")
-    print "2.8"
-    LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
-    print "3"
-    LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)                   SetStat("lines")
-    LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)     SetStat("locals")
-    LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)   SetStat("upvalues")
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
+    --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
+    LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+                   SetStat("fproto")
+    Hexdump(string.sub(chunk, idx, idx+32))
 
-    return func
+    Load52Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+                   SetStat("upvalues")
+
+    Hexdump(string.sub(chunk, idx, idx+32))
+    --LoadDebug(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)
+    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    print("Source code: ", desc.source)
+  
+    local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("No of Line Numbers:", n)
+    if n ~= 0 then
+        for i = 1, n do
+            local j = LoadNo(chunk, total_size, idx, MoveToNextTok)
+            print("\t Line number:", j)
+        end
+    end
+    local k = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("No of Local variables:", k)
+    if k ~= 0 then
+        for i = 1, k do
+            lvars = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+        end
+    end
+    Hexdump(string.sub(chunk, idx, idx+32))
+    local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("Goes into scope at instruction:", start)
+    local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("Goes out of scope at instruction:", stop)
+    local nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("No of Upvalues:", nups)
+
+    return desc
     -- end of Load52Function
 end
 
@@ -870,8 +975,8 @@ function Dechunk(chunk_name, chunk)
         --
         -- actual call to start the function loading process
         --
-        result.func = Load51Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, result.func, 0, 1)
+        result.desc = Load51Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, result.desc, 0, 1)
         stat.total = idx - 1
         DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
         result.stat = stat
@@ -881,8 +986,8 @@ function Dechunk(chunk_name, chunk)
         --  Lua Version 5.2
         --
         print "Found Lua 52 chucnk"
-        result.func = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, result.func, 0, 1)
+        result.desc = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, result.desc, 0, 1)
     end
 
     return result
