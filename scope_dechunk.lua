@@ -423,7 +423,7 @@ end
 --
 -- load locals information
 --
-local function LoadLocals(chunk, total_size, idx, previdx, func_movedesc, func_moveidx)
+local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
     desc.pos_locvars = previdx
     desc.locvars = {}
