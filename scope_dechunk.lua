@@ -67,7 +67,7 @@ local function DescLines(chunk, desc)
     for i = 1, size do
         local s = string.format("[%s] (%s)", ZeroPad(i, WIDTH), desc.lineinfo[i])
         FormatLine(chunk, GetLuaIntSize(), s, pos)
-        pos = pos + GetLuadescdescIntSize()
+        pos = pos + GetLuaIntSize()
     end
     -- mark significant lines in source listing
     SourceMark(desc)
@@ -94,13 +94,15 @@ end
 --
 -- describe upvalues information
 --
-local function DescUpvalues(chunk, descdesc)
-    local n = descdesc.sizeupvalues
-    DescLine(chunk, "* upvalues:")
-    FormatLine(chunk, GetLuaIntSize(), "sizeupvalues ("..n..")", descdesc.pos_upvalues)
+local function DescUpvalues(chunk, desc)
+    local n = desc.sizeupvalues
+    DescLine(chunk, "* upvalues:") 
+    if n == nil then return end
+    if n == 1 then return end -- XX HACK by Vijo for lua 5.2
+    FormatLine(chunk, GetLuaIntSize(), "sizeupvalues ("..n..")", desc.pos_upvalues)
     for i = 1, n do
-        local upvalue = descdesc.upvalues[i]
-        DescString(chunk, upvalue, descdesc.posupvalues[i])
+        local upvalue = desc.upvalues[i]
+        DescString(chunk, upvalue, desc.posupvalues[i])
         DescLine(chunk, "upvalue ["..(i - 1).."]: "..EscapeString(upvalue))
         BriefLine(".upvalue"..GetOutputSep()..EscapeString(upvalue, 1)
                     ..GetOutputSep()..GetOutputComment()..(i - 1))
@@ -144,13 +146,14 @@ end
 --
 -- describe constants information (local functions)
 --
-local function DescConstantPs(chunk, descdesc)
-    local n = descdesc.sizep
+local function DescConstantPs(chunk, desc)
+    local n = desc.sizep
+    if n == nil then return end
     DescLine(chunk,"* functions:")
-    FormatLine(chunk, GetLuaIntSize(), "sizep ("..n..")", descdesc.pos_ps)
+    FormatLine(chunk, GetLuaIntSize(), "sizep ("..n..")", desc.pos_ps)
     for i = 1, n do
         -- recursive call back on itself, next level
-        DescFunction(chunk,descdesc.p[i], i - 1, level + 1)
+        DescFunction(chunk,desc.p[i], i - 1, level + 1)
     end
 end
 
@@ -420,11 +423,11 @@ end
 --
 -- load locals information
 --
-local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, descdescdesc, func_moveidx)
+local function LoadLocals(chunk, total_size, idx, previdx, func_movedesc, func_moveidx)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    descdescdesc.pos_locvars = previdx
-    descdescdesc.locvars = {}
-    descdescdesc.sizelocvars = n
+    desc.pos_locvars = previdx
+    desc.locvars = {}
+    desc.sizelocvars = n
     for i = 1, n do
         local locvar = {}
         locvar.varname = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
@@ -432,15 +435,15 @@ local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, desc
         locvar.startpc = LoadInt(chunk, total_size, idx, func_movetonext)
         locvar.pos_startpc = previdx
         locvar.endpc = LoadInt(chunk, total_size, idx, func_movetonext)
-        lodescdescdesccvar.pos_endpc = previdx
-        descdescdesc.locvars[i] = locvar
+        lodesccvar.pos_endpc = previdx
+        desc.locvars[i] = locvar
     end
 end
 
 --
 -- load function prototypes information (Used in 5.2)
 --
-local function LoadFuncProto(chunk, total_size, idx, previdx, func_movetonext, descdesc, func_moveidx)
+local function LoadFuncProto(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
     local n = LoadNo(chunk, total_size, idx, func_movetonext)
     --if n > 1 then
         --error(string.format("bad Function prototypes: read %d, expected %d", n, func.nups))
@@ -557,14 +560,14 @@ end
 --
 -- load constants information (local functions)
 --
-local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, descdesc)
+local function LoadConstantPs(chunk, total_size, idx, previdx, func_movetonext, desc)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    descdesc.pos_ps = previdx
-    descdesc.p = {}
-    descdesc.sizep = n
+    desc.pos_ps = previdx
+    desc.p = {}
+    desc.sizep = n
     for i = 1, n do
         -- recursive call back on itself, next leveldescdesc
-        desc.p[i] = LoadFunction(chunk, total_size, idx, previdx, descdesc.source, i - 1, level + 1)
+        desc.p[i] = LoadFunction(chunk, total_size, idx, previdx, desc.source, i - 1, level + 1)
     end
 end
 
@@ -732,7 +735,8 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
     --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
     LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
-                   SetStat("fproto")
+                   --SetStat("fproto")
+                   SetStat("funcs")
     Hexdump(string.sub(chunk, idx, idx+32))
 
     Load52Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
@@ -742,28 +746,40 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     --LoadDebug(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)
     desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
     print("Source code: ", desc.source)
+    desc.pos_source = previdx
   
     local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
     print("No of Line Numbers:", n)
+    desc.lineinfo = {}
     if n ~= 0 then
         for i = 1, n do
             local j = LoadNo(chunk, total_size, idx, MoveToNextTok)
             print("\t Line number:", j)
+            desc.lineinfo[i] = j
         end
     end
+    desc.pos_lineinfo = previdx
+    desc.sizelineinfo = n
+    SetStat("lines")
+
     local k = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    desc.pos_locvars = previdx
+    desc.locvars = {}
+    desc.sizelocvars = k
     print("No of Local variables:", k)
     if k ~= 0 then
         for i = 1, k do
             lvars = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
         end
     end
+    SetStat("locals")
+
     Hexdump(string.sub(chunk, idx, idx+32))
     local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
     print("Goes into scope at instruction:", start)
     local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
     print("Goes out of scope at instruction:", stop)
-    local nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    desc.nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
     print("No of Upvalues:", nups)
 
     return desc
@@ -993,3 +1009,9 @@ function Dechunk(chunk_name, chunk)
     return result
     -- end of Dechunk
 end
+
+
+-- Next step : make sure the values in desc for lua 5.2 makes sense
+-- then : Make 5.2 work and make sure 5.1 works too
+-- so   : Checkpoint it - may be push to github
+-- then : start 5.3 work
