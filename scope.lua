@@ -169,7 +169,15 @@ function main()
                 
         else
             if prevline then l = prevline..l; prevline = nil end
-            local func, msg = loadstring(l, "(interactive mode)")
+            -- loadstring function was present in lua 5.1, and 5.2
+            -- it got deprecated in lua 5.3 and is now load()
+            -- load() also seems to work in lua 5.2
+            local func, msg
+            if _VERSION == 'Lua 5.3' then
+            	func, msg = load(l, "(interactive mode)")
+            else
+            	func, msg = loadstring(l, "(interactive mode)")
+            end
             func() -- Call the loaded lua string as a function
             if not func then
                 print("Dechunk: failed to compile your input")

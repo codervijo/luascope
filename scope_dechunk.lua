@@ -1004,6 +1004,13 @@ function Dechunk(chunk_name, chunk)
         print "Found Lua 52 chucnk"
         result.desc = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
         DescFunction(chunk, result.desc, 0, 1)
+    elseif dets.version == 83 then
+
+        --
+        -- Lua Version 5.3
+        --
+        print "Found Lua 53 Chunk"
+        print "Lua 5.3 is not supported yet"
     end
 
     return result
