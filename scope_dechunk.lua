@@ -993,3 +993,9 @@ function Dechunk(chunk_name, chunk)
     return result
     -- end of Dechunk
 end
+
+
+-- Next step : make sure the values in desc for lua 5.2 makes sense
+-- then : Make 5.2 work and make sure 5.1 works too
+-- so   : Checkpoint it - may be push to github
+-- then : start 5.3 work
