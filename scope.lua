@@ -173,17 +173,20 @@ function main()
             -- it got deprecated in lua 5.3 and is now load()
             -- load() also seems to work in lua 5.2
             local func, msg
+            oconfig = Oconfig
             if _VERSION == 'Lua 5.3' then
             	func, msg = load(l, "(interactive mode)")
+            	oconfig:SetVersion("5.3")
             else
             	func, msg = loadstring(l, "(interactive mode)")
+            	oconfig:SetVersion("5.2")
             end
             func() -- Call the loaded lua string as a function
             if not func then
                 print("Dechunk: failed to compile your input")
             else
                 binchunk = string.dump(func)
-                Dechunk("(interactive mode)", binchunk)
+                Dechunk("(interactive mode)", binchunk, oconfig)
             end
             
         end--if l

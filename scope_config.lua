@@ -97,6 +97,11 @@ config.WIDTH_OPCODE       = nil          -- width of opcode field
 config.VERBOSE_TEST       = false        -- more verbosity for --test
 
 --
+-- Detected run time configs
+--
+config.version            = "5.1"
+
+--
 -- primitive platform auto-detection
 --
 function init_scope_config_description()
@@ -234,6 +239,14 @@ function GetLuaNumberType()
     return config.number_type
 end
 
+function GetLuaRuntimeVersion()
+    return config.version
+end
+
+function SetLuaRuntimeVersion(ver)
+    config.version = ver
+end
+
 function SetLuaNumberType(t)
     config.number_type = t
 end
@@ -282,3 +295,19 @@ end
 function ShouldIPrintLowercase()
     return config.DISPLAY_LOWERCASE
 end
+
+Oconfig = {
+    SetVersion       =  function (self, v)
+                            SetLuaRuntimeVersion(v)
+                        end,
+    GetVersion       =  function (self)
+                            return 0x53 /* TODO fix */
+                        end,
+    GetVersionString =  function (self)
+                            return config.version
+                        end,
+    GetSign          =  function (self)
+                            return config.SIGNATURE
+                        end
+}
+

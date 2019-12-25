@@ -786,22 +786,145 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
     -- end of Load52Function
 end
 
-function CheckSignature(size, idx, chunk)
-    len = string.len(config.SIGNATURE)
+-- References : https://github.com/viruscamp/luadec/blob/master/ChunkSpy/ChunkSpy53.lua
+--              https://the-ravi-programming-language.readthedocs.io/en/latest/lua_bytecode_reference.html
+--              https://raw.githubusercontent.com/viruscamp/luadec/master/ChunkSpy/ChunkSpy53.lua
+function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
+    local desc = {}
+    local idx  = ix
+    local previdx = pix
+
+    local function MoveToNextTok(size)
+        previdx = idx
+        idx = idx + size
+    end
+
+    local function MoveIdxLen(len)
+        idx = idx + len
+    end
+
+    local function Check52Signature(size, idx, chunk)
+        local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
+
+        len = string.len(lua52signature)
+        IsChunkSizeOk(len, idx, size, "lua52 signature")
+
+        if string.sub(chunk, idx, len) ~= lua52signature then
+            print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
+        end
+
+        return idx+len
+    end
+
+    -------------------------------------------------------------
+    -- body of LoadFunction() starts here
+    -------------------------------------------------------------
+    -- statistics handler
+    local start = idx
+    desc.stat = {}
+    local function SetStat(item)
+        desc.stat[item] = idx - start
+        start = idx
+    end
+    print("Loading string at "..idx)
+    Hexdump(chunk)
+    previdx = idx
+    idx = Check52Signature(total_size, idx, chunk)
+
+    -- line where the function was defined
+    desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Pos :".. desc.linedefined)
+    desc.pos_linedefined = previdx
+    desc.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("Last line :"..desc.lastlinedefined)
+    print "1"
+
+    -------------------------------------------------------------
+    -- some byte counts
+    --------------------desc-----------------------------------------
+    if IsChunkSizeOk(4, idx, total_size, "function header") then return end
+    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
+    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
+    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    SetStat("header")
+    print("Num params :"..desc.numparams)
+    print("Max stack size :"..desc.maxstacksize)
+    print "2"
+
+    -- load parts of a chunk
+    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
+    print "2.4"
+    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
+    --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
+    LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+                   --SetStat("fproto")
+                   SetStat("funcs")
+    Hexdump(string.sub(chunk, idx, idx+32))
+
+    Load52Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+                   SetStat("upvalues")
+
+    Hexdump(string.sub(chunk, idx, idx+32))
+    --LoadDebug(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)
+    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    print("Source code: ", desc.source)
+    desc.pos_source = previdx
+  
+    local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    print("No of Line Numbers:", n)
+    desc.lineinfo = {}
+    if n ~= 0 then
+        for i = 1, n do
+            local j = LoadNo(chunk, total_size, idx, MoveToNextTok)
+            print("\t Line number:", j)
+            desc.lineinfo[i] = j
+        end
+    end
+    desc.pos_lineinfo = previdx
+    desc.sizelineinfo = n
+    SetStat("lines")
+
+    local k = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    desc.pos_locvars = previdx
+    desc.locvars = {}
+    desc.sizelocvars = k
+    print("No of Local variables:", k)
+    if k ~= 0 then
+        for i = 1, k do
+            lvars = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+        end
+    end
+    SetStat("locals")
+
+    Hexdump(string.sub(chunk, idx, idx+32))
+    local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("Goes into scope at instruction:", start)
+    local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("Goes out of scope at instruction:", stop)
+    desc.nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    print("No of Upvalues:", nups)
+
+    return desc
+    -- end of Load53Function
+end
+
+function CheckSignature(size, idx, chunk, oconfig)
+    len = string.len(oconfig:GetSign())
     IsChunkSizeOk(len, idx, size, "header signature")
-    if string.sub(chunk, 1, len) ~= config.SIGNATURE then
+    if string.sub(chunk, 1, len) ~= oconfig:GetSign() then
         error("header signature not found, this is not a Lua chunk")
     end
 
     return len
 end
 
-function CheckVersion(size, idx, chunk, func_movetonext)
+function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
     IsChunkSizeOk(1, idx, size, "version byte")
     ver = LoadByte(chunk, idx, func_movetonext)
-    if ver ~= config.VERSION then
-        --error(string.format("Dechunk cannot read version %02X chunks", ver))
-        print(string.format("Dechunk cannot read version %02X chunks", ver))
+    if ver ~= oconfig:GetVersion() then
+        error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
+        --print(string.format("Dechunk cannot read version %02X chunks", ver))
     end
 
     return ver
@@ -869,7 +992,7 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_movetonext)
+function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_movetonext, oconfig)
     local chunkdets = {}
 
     local function MoveToNextTok(size)
@@ -889,14 +1012,14 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     -- test signature
     --
-    len = CheckSignature(size, idx, chunk)
+    len = CheckSignature(size, idx, chunk, oconfig)
     FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
     idx = idx + len
 
     --
     -- test version
     --
-    result.version = CheckVersion(size, idx, chunk, MoveToNextTok)
+    result.version = CheckVersion(size, idx, chunk, MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
     chunkdets.version  = result.version
 
@@ -965,7 +1088,7 @@ end
 --   user trace the extent of functions in the listing
 --]]
 
-function Dechunk(chunk_name, chunk)
+function Dechunk(chunk_name, chunk, oconfig)
     ---------------------------------------------------------------
     -- variables
     ---------------------------------------------------------------
@@ -983,7 +1106,7 @@ function Dechunk(chunk_name, chunk)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok)
+    idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok, oconfig)
 
     if dets.version == 81 then
         --
@@ -1011,6 +1134,7 @@ function Dechunk(chunk_name, chunk)
         --
         print "Found Lua 53 Chunk"
         print "Lua 5.3 is not supported yet"
+        result.desc = Load53Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
     end
 
     return result
@@ -1018,7 +1142,7 @@ function Dechunk(chunk_name, chunk)
 end
 
 
--- Next step : make sure the values in desc for lua 5.2 makes sense
--- then : Make 5.2 work and make sure 5.1 works too
--- so   : Checkpoint it - may be push to github
+-- DONE Next step : make sure the values in desc for lua 5.2 makes sense
+-- DONE then : Make 5.2 work and make sure 5.1 works too
+-- DONE so   : Checkpoint it - may be push to github
 -- then : start 5.3 work
