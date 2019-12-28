@@ -301,13 +301,70 @@ Oconfig = {
                             SetLuaRuntimeVersion(v)
                         end,
     GetVersion       =  function (self)
-                            return 0x53 /* TODO fix */
+                            return 0x53 -- TODO fix
                         end,
     GetVersionString =  function (self)
                             return config.version
                         end,
     GetSign          =  function (self)
                             return config.SIGNATURE
+                        end,
+    GetTypeNIL       =  function (self)
+                            return GetTypeNIL()
+                        end,
+    GetTypeBoolean   =  function (self)
+                            return GetTypeBoolean()
+                        end,
+    GetTypeNumber    =  function (self)
+                            return GetTypeNumber()
+                        end,
+    GetTypeString    =  function (self)
+                            return GetTypeString()
+                        end,
+    GetOutputSep     =  function (self)
+                            return GetOutputSep()
+                        end,
+    GetOutputShowHexData =  function (self)
+                                return GetOutputShowHexData()
+                            end,
+    GetOutputBlankHex = function (self)
+                            return GetOutputBlankHex()
+                        end,
+    GetOutputHexWidth = function (self)
+                            return GetOutputHexWidth()
+                        end,
+    GetOutputPosWidth = function (self)
+                            return GetOutputPosWidth()
+                        end,
+    GetOutputComment  = function (self)
+                            return GetOutputComment()
+                        end,
+    GetOutputPosString= function (self, i)
+                            return GetOutputPosString(i)
+                        end,
+    GetLuaDescription = function (self)
+                            return GetLuaDescription()
+                        end,
+    GetLuaIntSize     = function (self)
+                            return GetLuaIntSize()
+                        end,
+    GetLuaSizetSize   = function (self)
+                            return GetLuaSizetSize()
+                        end,
+    GetLuaNumberSize  = function (self)
+                            return GetLuaNumberSize()
+                        end,
+    GetLuaInstructionSize = function (self)
+                                return GetLuaInstructionSize()
+                            end,
+    GetLuaNumberType  = function (self)
+                            return GetLuaNumberType()
+                        end,
+    GetLuaEndianness  = function (self)
+                            return GetLuaEndianness()
+                        end,
+    GetConfigDetect   = function (self)
+                            return config.AUTO_DETECT
                         end
 }
 

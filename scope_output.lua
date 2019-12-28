@@ -12,6 +12,7 @@ package.path = package.path .. ";./?.lua;/usr/src/?.lua"
 require("scope_config")
 
 outfile = {}
+oconfig = Oconfig
 
 --[[
 -- Display support functions
@@ -106,8 +107,8 @@ end
 --
 function HeaderLine()
 	if ShouldIPrintLess() then return end
-	WriteLine(LeftJustify("Pos", GetOutputPosWidth())..GetOutputSep()
-	          ..LeftJustify("Hex Data", GetOutputPosWidth() * 2 + 1)..GetOutputSep()
+	WriteLine(LeftJustify("Pos", oconfig:GetOutputPosWidth())..oconfig:GetOutputSep()
+	          ..LeftJustify("Hex Data", oconfig:GetOutputPosWidth() * 2 + 1)..oconfig:GetOutputSep()
 	          .."Description or Code\n"
 	          ..string.rep("-", 72))
 end
@@ -117,7 +118,7 @@ end
 --
 function DescLine(desc)
 	if ShouldIPrintLess() then return end
-	WriteLine(string.rep(" ", GetOutputPosWidth())..GetOutputSep()..GetOutputBlankHex()..GetOutputSep()
+	WriteLine(string.rep(" ", oconfig:GetOutputPosWidth())..oconfig:GetOutputSep()..oconfig:GetOutputBlankHex()..oconfig:GetOutputSep()
 	          ..desc)
 end
 
@@ -132,8 +133,8 @@ end
 -- returns position, i uses string index (starts from 1)
 --
 function FormatPos(i)
-	local pos = GetOutputPosString(i)
-	return ZeroPad(pos, GetOutputPosWidth())
+	local pos = oconfig:GetOutputPosString(i)
+	return ZeroPad(pos, oconfig:GetOutputPosWidth())
 end
 
 --
@@ -144,38 +145,38 @@ function FormatLine(chunk, size, desc, index, segment)
 	if ShouldIPrintHexData() then
 		-- nicely formats binary chunk data in multiline hexadecimal
 		if size == 0 then
-			WriteLine(FormatPos(index)..GetOutputSep()..GetOutputBlankHex()..GetOutputSep()
+			WriteLine(FormatPos(index)..oconfig:GetOutputSep()..oconfig:GetOutputBlankHex()..oconfig:GetOutputSep()
 						..desc)
 		else
 			-- split hex data into config.WIDTH_HEX byte strings
 			while size > 0 do
 				local d, dlen = "", size
-				if size > GetOutputHexWidth() then dlen = GetOutputHexWidth() end
+				if size > oconfig:GetOutputHexWidth() then dlen = oconfig:GetOutputHexWidth() end
 				-- build hex data digits
 				for i = 0, dlen - 1 do
 					d = d..string.format("%02X", string.byte(chunk, index + i))
 				end
 				-- add padding or continuation indicator
-				d = d..string.rep("  ", GetOutputHexWidth() - dlen)
-				if segment or size > GetOutputHexWidth() then
-					d = d.."+"; size = size - GetOutputHexWidth()
+				d = d..string.rep("  ", oconfig:GetOutputHexWidth() - dlen)
+				if segment or size > oconfig:GetOutputHexWidth() then
+					d = d.."+"; size = size - oconfig:GetOutputHexWidth()
 				else
 					d = d.." "; size = 0
 				end
 				-- description only on first line of a multiline
 				if desc then
-					WriteLine(FormatPos(index)..GetOutputSep()
-								..d..GetOutputSep()
+					WriteLine(FormatPos(index)..oconfig:GetOutputSep()
+								..d..oconfig:GetOutputSep()
 								..desc)
 					desc = nil
 				else
-					WriteLine(FormatPos(index)..GetOutputSep()..d)
+					WriteLine(FormatPos(index)..oconfig:GetOutputSep()..d)
 				end
 				index = index + dlen
 			end--while
 		end--if size
 	else--no hex data mode
-		WriteLine(FormatPos(index)..GetOutputSep()..desc)
+		WriteLine(FormatPos(index)..oconfig:GetOutputSep()..desc)
 	end
 	-- end of FormatLine
 end
@@ -186,7 +187,7 @@ function OutputHeader(size, name, chunk, idx)
 	if name then
 		FormatLine(chunk, 0, "** source chunk: "..name, idx)
 		if ShouldIPrintBrief() then
-			WriteLine(GetOutputComment().."source chunk: "..name)
+			WriteLine(oconfig:GetOutputComment().."source chunk: "..name)
 		end
 	end
 	DescLine("** global header start **")

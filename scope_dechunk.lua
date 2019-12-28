@@ -940,13 +940,13 @@ function CheckFormat(size, idx, chunk, func_movetonext)
     return format
 end
 
-function CheckEndianness(size, idx, chunk, func_movetonext)
+function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
     IsChunkSizeOk(1, idx, size, "endianness byte")
     local endianness = LoadByte(chunk, idx, func_movetonext)
-    if not config.AUTO_DETECT then
-        if endianness ~= GetLuaEndianness() then
+    if not oconfig:GetConfigDetect() then
+        if endianness ~= oconfig:GetLuaEndianness() then
             error(string.format("unsupported endianness %s vs %s",
-                  endianness, GetLuaEndianness()))
+                  endianness, oconfig:GetLuaEndianness()))
         end
     else
         SetLuaEndianness(endianness)
@@ -957,7 +957,7 @@ end
 function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, typename)
     IsChunkSizeOk(4, idx, size, "size bytes")
     local byte = LoadByte(chunk, idx, func_movetonext)
-    if not config.AUTO_DETECT then
+    if not oconfig:GetConfigDetect() then
         if byte ~= config[mysize] then
             error(string.format("mismatch in %s size (needs %d but read %d)",
                   sizename, config[mysize], byte))
@@ -972,10 +972,10 @@ function CheckIntegral(size, idx, chunk, func_movetonext)
     SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
 end
 
-function CheckLuaNumber()
-    local num_id = GetLuaNumberSize() .. GetLuaIntegral()
-    if not config.AUTO_DETECT then
-        if GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
+function CheckLuaNumber(oconfig)
+    local num_id = oconfig:GetLuaNumberSize() .. oconfig:GetLuaIntegral()
+    if not oconfig:GetConfigDetect() then
+        if oconfig:GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
             error("incorrect lua_Number format or bad test number")
         end
     else
@@ -984,7 +984,7 @@ function CheckLuaNumber()
         for i, v in pairs(LUANUMBER_ID) do
             if num_id == i then SetLuaNumberType(v) end
         end
-        if not GetLuaNumberType() then
+        if not oconfig:GetLuaNumberType() then
             error("unrecognized lua_Number type")
         end
     end
@@ -1034,7 +1034,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     -- test endianness
     --
-    endianness = CheckEndianness(size, idx, chunk, MoveToNextTok)
+    endianness = CheckEndianness(size, idx, chunk, MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
     chunkdets.endianness = endianness
 
@@ -1067,12 +1067,12 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     -- verify or determine lua_Number type
     --
-    CheckLuaNumber()
-    DescLine("* number type: "..GetLuaNumberType())
+    CheckLuaNumber(oconfig)
+    DescLine("* number type: "..oconfig:GetLuaNumberType())
 
     init_scope_config_description()
-    DescLine("* "..GetLuaDescription())
-    if ShouldIPrintBrief() then WriteLine(GetOutputComment()..GetLuaDescription()) end
+    DescLine("* "..oconfig:GetLuaDescription())
+    if ShouldIPrintBrief() then WriteLine(oconfig:GetOutputComment()..oconfig:GetLuaDescription()) end
     -- end of global header
     stat.header = idx - 1
     DisplayStat("* global header = "..stat.header.." bytes")
