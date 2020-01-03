@@ -189,7 +189,7 @@ end
 --
 -- displays function information
 --
-function DescFunction(chunk, desc, num, level)
+function DescFunction(chunk, desc, num, level, oconfig)
     DescLine(chunk, "")
     BriefLine("")
     FormatLine(chunk, 0, "** function ["..num.."] definition (level "..level..")", desc.pos_source)
@@ -209,10 +209,10 @@ function DescFunction(chunk, desc, num, level)
 
     -- line where the function was defined
     local pos = desc.pos_linedefined
-    FormatLine(chunk, GetLuaIntSize(), "line defined ("..desc.linedefined..")", pos)
-    pos = pos + GetLuaIntSize()
-    FormatLine(chunk, GetLuaIntSize(), "last line defined ("..desc.lastlinedefined..")", pos)
-    pos = pos + GetLuaIntSize()
+    FormatLine(chunk, oconfig:GetLuaIntSize(), "line defined ("..desc.linedefined..")", pos)
+    pos = pos + oconfig:GetLuaIntSize()
+    FormatLine(chunk, oconfig:GetLuaIntSize(), "last line defined ("..desc.lastlinedefined..")", pos)
+    pos = pos + oconfig:GetLuaIntSize()
 
     -- display byte counts
     FormatLine(chunk, 1, "nups ("..desc.nups..")", pos)
@@ -242,18 +242,18 @@ function DescFunction(chunk, desc, num, level)
     end
 
     -- show function statistics block
-    DisplayStat("* func header   = "..desc.stat.header.." bytes")
-    DisplayStat("* lines size    = "..desc.stat.lines.." bytes")
-    DisplayStat("* locals size   = "..desc.stat.locals.." bytes")
-    DisplayStat("* upvalues size = "..desc.stat.upvalues.." bytes")
-    DisplayStat("* consts size   = "..desc.stat.consts.." bytes")
-    DisplayStat("* funcs size    = "..desc.stat.funcs.." bytes")
-    DisplayStat("* code size     = "..desc.stat.code.." bytes")
+    DisplayStat("* func header   = "..desc.stat.header.." bytes", oconfig)
+    DisplayStat("* lines size    = "..desc.stat.lines.." bytes", oconfig)
+    DisplayStat("* locals size   = "..desc.stat.locals.." bytes", oconfig)
+    DisplayStat("* upvalues size = "..desc.stat.upvalues.." bytes", oconfig)
+    DisplayStat("* consts size   = "..desc.stat.consts.." bytes", oconfig)
+    DisplayStat("* funcs size    = "..desc.stat.funcs.." bytes", oconfig)
+    DisplayStat("* code size     = "..desc.stat.code.." bytes", oconfig)
     desc.stat.total = desc.stat.header + desc.stat.lines +
-    desc.stat.locals + desc.stat.upvalues +
-    desc.stat.consts + desc.stat.funcs +
-    desc.stat.code
-    DisplayStat(chunk, "* TOTAL size    = "..desc.stat.total.." bytes")
+                      desc.stat.locals + desc.stat.upvalues +
+                      desc.stat.consts + desc.stat.funcs +
+                      desc.stat.code
+    DisplayStat("* TOTAL size    = "..desc.stat.total.." bytes", oconfig)
     DescLine(chunk, "** end of function **\n")
     BriefLine("; end of function\n")
 end
@@ -1075,7 +1075,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     if ShouldIPrintBrief() then WriteLine(oconfig:GetOutputComment()..oconfig:GetLuaDescription()) end
     -- end of global header
     stat.header = idx - 1
-    DisplayStat("* global header = "..stat.header.." bytes")
+    DisplayStat("* global header = "..stat.header.." bytes", oconfig)
     DescLine("** global header end **")
 
     return idx, previdx, chunkdets
@@ -1115,9 +1115,9 @@ function Dechunk(chunk_name, chunk, oconfig)
         -- actual call to start the function loading process
         --
         result.desc = Load51Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, result.desc, 0, 1)
+        DescFunction(chunk, result.desc, 0, 1, oconfig)
         stat.total = idx - 1
-        DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes")
+        DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes", oconfig)
         result.stat = stat
         FormatLine(chunk, 0, "** end of chunk **", idx)
     elseif dets.version == 82 then
@@ -1126,7 +1126,7 @@ function Dechunk(chunk_name, chunk, oconfig)
         --
         print "Found Lua 52 chucnk"
         result.desc = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, result.desc, 0, 1)
+        DescFunction(chunk, result.desc, 0, 1, oconfig)
     elseif dets.version == 83 then
 
         --

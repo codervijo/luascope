@@ -301,7 +301,7 @@ Oconfig = {
                             SetLuaRuntimeVersion(v)
                         end,
     GetVersion       =  function (self)
-                            return 0x53 -- TODO fix
+                            return 0x52 -- TODO fix
                         end,
     GetVersionString =  function (self)
                             return config.version
@@ -363,8 +363,14 @@ Oconfig = {
     GetLuaEndianness  = function (self)
                             return GetLuaEndianness()
                         end,
+    GetLuaIntegral    = function (self)
+                            return GetLuaIntegral()
+                        end,
     GetConfigDetect   = function (self)
                             return config.AUTO_DETECT
-                        end
+                        end,
+    ShouldIPrintStats = function (self)
+                            return ShouldIPrintStats()
+                         end
 }
 

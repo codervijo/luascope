@@ -125,8 +125,8 @@ end
 --
 -- optionally display a pre-formatted statistic
 --
-function DisplayStat(stat)
-	if ShouldIPrintStats() then DescLine(stat) end
+function DisplayStat(stat, oconfig)
+	if oconfig:ShouldIPrintStats() then DescLine(stat) end
 end
 
 --
