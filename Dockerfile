@@ -1,1 +1,1 @@
-b2b/apps/lua52/Dockerfile
+b2b/apps/lua53/Dockerfile

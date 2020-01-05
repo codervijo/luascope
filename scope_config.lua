@@ -301,7 +301,15 @@ Oconfig = {
                             SetLuaRuntimeVersion(v)
                         end,
     GetVersion       =  function (self)
-                            return 0x52 -- TODO fix
+                            if config.version == "5.1" then
+                                return 0x51
+                            elseif config.version == "5.2" then
+                                return 0x52
+                            elseif config.version == "5.3" then
+                                return 0x53
+                            else
+                                return 0x00
+                            end
                         end,
     GetVersionString =  function (self)
                             return config.version
