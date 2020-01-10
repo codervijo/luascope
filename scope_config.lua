@@ -377,8 +377,24 @@ Oconfig = {
     GetConfigDetect   = function (self)
                             return config.AUTO_DETECT
                         end,
+    GetLuaSize_A      = function (self)
+                            return config.SIZE_A
+                        end,
+    GetLuaSize_B      = function (self)
+                            return config.SIZE_B
+                        end,
+    GetLuaSize_C      = function (self)
+                            return config.SIZE_C
+                        end,
+    GetLuaSize_OP     = function (self)
+                            return config.SIZE_OP
+                        end,
+    GetLuaFPF         = function (self)
+                            return config.FPF
+                        end,                    
     ShouldIPrintStats = function (self)
                             return ShouldIPrintStats()
-                         end
+                        end,
+
 }
 

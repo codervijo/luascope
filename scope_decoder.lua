@@ -43,27 +43,32 @@ l51vm = {}
 -----------------------------------------------------------------------
 -- instruction decoder initialization
 -----------------------------------------------------------------------
-function DecodeInit()
+function DecodeInit(oconfig)
+	local sizea   = config.SIZE_A
+	local sizeb   = config.SIZE_B
+	local sizec   = config.SIZE_C
+	local sizeop  = config.SIZE_OP
+
 	---------------------------------------------------------------
 	-- calculate masks
 	---------------------------------------------------------------
-	l51vm.SIZE_Bx = config.SIZE_B + config.SIZE_C
-	local MASK_OP = math.ldexp(1, config.SIZE_OP)
-	local MASK_A  = math.ldexp(1, config.SIZE_A)
-	local MASK_B  = math.ldexp(1, config.SIZE_B)
-	local MASK_C  = math.ldexp(1, config.SIZE_C)
+	l51vm.SIZE_Bx = sizeb + sizec
+	local MASK_OP = math.ldexp(1, sizeop)
+	local MASK_A  = math.ldexp(1, sizea)
+	local MASK_B  = math.ldexp(1, sizeb)
+	local MASK_C  = math.ldexp(1, sizec)
 	local MASK_Bx = math.ldexp(1, l51vm.SIZE_Bx)
 	l51vm.MAXARG_sBx = math.floor((MASK_Bx - 1) / 2)
-	l51vm.BITRK = math.ldexp(1, config.SIZE_B - 1)
+	l51vm.BITRK = math.ldexp(1, sizeb - 1)
 
 	---------------------------------------------------------------
 	-- iABC instruction segment tables
 	---------------------------------------------------------------
 	l51vm.iABC = {       -- tables allows field sequence to be extracted
-		config.SIZE_OP,     -- using a loop; least significant field first
-		config.SIZE_A,      -- additional lookups below, kludgy
-		config.SIZE_C,
-		config.SIZE_B,
+		sizeop,     -- using a loop; least significant field first
+		sizea,      -- additional lookups below, kludgy
+		sizec,
+		sizeb,
 	}
 	l51vm.mABC = { MASK_OP, MASK_A, MASK_C, MASK_B, }
 	l51vm.nABC = { "OP", "A", "C", "B", }
@@ -157,34 +162,10 @@ function DecodeInst(code, iValues)
 end
 
 -----------------------------------------------------------------------
--- encodes an instruction into a little-endian byte string
--- * encodes from OP/A/B/C fields, to enable bit field size changes
------------------------------------------------------------------------
-function EncodeInst(inst)
-	local v, i = "", 0
-	local cValue, cBits, cPos = 0, 0, 1
-	-- encode an instruction
-	while i < config.size_Instruction do
-		-- if need more bits, suck in a field at a time
-		while cBits < 8 do
-			cValue = inst[l51vm.nABC[cPos]] * math.ldexp(1, cBits) + cValue
-			cBits = cBits + l51vm.iABC[cPos]; cPos = cPos + 1
-		end
-		-- extract bytes to instruction string
-		while cBits >= 8 do
-			v = v..string.char(cValue % 256)
-			cValue = math.floor(cValue / 256)
-			cBits = cBits - 8; i = i + 1
-		end
-	end
-	return v
-end
-
------------------------------------------------------------------------
 -- describe an instruction
 -- * make instructions descriptions more verbose and readable
 -----------------------------------------------------------------------
-function DescribeInst(inst, pos, func)
+function DescribeInst(inst, pos, func, oconfig)
 	local Operand
 	local Comment = ""
 
@@ -261,7 +242,7 @@ function DescribeInst(inst, pos, func)
 	-- * see the descriptions in lopcodes.h for more information
 	----
 	if inst.prev then -- continuation of SETLIST
-		Operand = string.format(l51vm.FORMAT_Bx, func.code[pos])..config.PAD_Bx
+		Operand = string.format(l51vm.FORMAT_Bx, func.code[pos])
 	--
 	elseif inst.OP ==  0 then -- MOVE A B
 		Operand = OperandAB(inst)
@@ -327,7 +308,7 @@ function DescribeInst(inst, pos, func)
 		Operand = OperandABC(inst)
 	--
 	elseif inst.OP == 22 then -- JMP sBx
-		Operand = string.format(l51vm.FORMAT_Bx, inst.sBx)..config.PAD_Bx
+		Operand = string.format(l51vm.FORMAT_Bx, inst.sBx)
 		Comment = CommentLoc(inst.sBx)
 	--
 	elseif inst.OP == 23 or   -- EQ A B C
@@ -380,7 +361,7 @@ function DescribeInst(inst, pos, func)
 			c = func.code[pos + 1]
 			func.inst[pos + 1].prev = true
 		end
-		local start = (c - 1) * config.FPF + 1
+		local start = (c - 1) * oconfig:GetLuaFPF() + 1
 		local last = start + n - 1
 		Comment = "index "..start.." to "
 		if n ~= 0 then

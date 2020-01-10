@@ -161,12 +161,12 @@ end
 -- describe function code
 -- * inst decode subfunctions: DecodeInst() and DescribeInst()
 --
-local function DescCode(chunk, desc)
+local function DescCode(chunk, desc, oconfig)
     local size = desc.sizecode
     local pos = desc.pos_code
     DescLine(chunk,"* code:")
-    FormatLine(chunk, GetLuaIntSize(), "sizecode ("..size..")", pos)
-    pos = pos + GetLuaIntSize()
+    FormatLine(chunk, oconfig:GetLuaIntSize(), "sizecode ("..size..")", pos)
+    pos = pos + oconfig:GetLuaIntSize()
     desc.inst = {}
     local ISIZE = WidthOf(size)
     for i = 1, size do
@@ -176,13 +176,13 @@ local function DescCode(chunk, desc)
         DecodeInst(desc.code[i], desc.inst[i])
         local inst = desc.inst[i]
         -- compose instruction: opcode operands [; comments]
-        local d = DescribeInst(inst, i, desc)
+        local d = DescribeInst(inst, i, desc, oconfig)
         d = string.format("[%s] %s", ZeroPad(i, ISIZE), d)
         -- source code insertion
         SourceMerge(desc, i)
-        FormatLine(chunk, GetLuaInstructionSize(), d, pos)
+        FormatLine(chunk, oconfig:GetLuaInstructionSize(), d, pos)
         BriefLine(d)
-        pos = pos + GetLuaInstructionSize()
+        pos = pos + oconfig:GetLuaInstructionSize()
     end
 end
 
@@ -231,9 +231,9 @@ function DescFunction(chunk, desc, num, level, oconfig)
         DescUpvalues(chunk, desc)
         DescConstantKs(chunk, desc)
         DescConstantPs(chunk, desc)
-        DescCode(chunk, desc)
+        DescCode(chunk, desc, oconfig)
     else
-        DescCode(chunk, desc)        -- normal displays positional order
+        DescCode(chunk, desc, oconfig)        -- normal displays positional order
         DescConstantKs(chunk, desc)
         DescConstantPs(chunk, desc)
         DescLines(chunk,desc)
@@ -1056,7 +1056,7 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
                previdx)
     -- initialize decoder (see the 5.0.2 script if you want to customize
     -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
-    DecodeInit()
+    DecodeInit(oconfig)
 
     --
     -- test integral flag (5.1)
