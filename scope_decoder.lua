@@ -44,10 +44,10 @@ l51vm = {}
 -- instruction decoder initialization
 -----------------------------------------------------------------------
 function DecodeInit(oconfig)
-	local sizea   = config.SIZE_A
-	local sizeb   = config.SIZE_B
-	local sizec   = config.SIZE_C
-	local sizeop  = config.SIZE_OP
+	local sizea   = oconfig:GetLuaSize_A()
+	local sizeb   = oconfig:GetLuaSize_B()
+	local sizec   = oconfig:GetLuaSize_C()
+	local sizeop  = oconfig:GetLuaSize_OP()
 
 	---------------------------------------------------------------
 	-- calculate masks

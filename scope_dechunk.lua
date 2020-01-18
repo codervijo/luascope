@@ -954,7 +954,7 @@ function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
     return endianness
 end
 
-function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, typename)
+function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, typename, oconfig)
     IsChunkSizeOk(4, idx, size, "size bytes")
     local byte = LoadByte(chunk, idx, func_movetonext)
     if not oconfig:GetConfigDetect() then
@@ -1042,16 +1042,16 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     -- test sizes
     --
     -- byte sizes
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes")
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)", "int", "bytes"),
                previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes")
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)", "size_t", "bytes"),
                previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes")
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)", "Instruction", "bytes"),
                previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes")
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)", "number", "bytes"),
                previdx)
     -- initialize decoder (see the 5.0.2 script if you want to customize
