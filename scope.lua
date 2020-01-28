@@ -2,7 +2,7 @@
 
 --[[
   Lua Scope
-  A Lua 5.1 binary chunk disassembler
+  A Lua 5.1/5.2/5.3 binary chunk disassembler
   LuaScope was inspired by Jein-Hong Man's ChunkSpy
 --]]
 

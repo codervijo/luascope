@@ -2,7 +2,7 @@
 
 --[[
     Configuration for Lua Scope
-    A Lua 5.1 binary chunk disassembler
+    A Lua 5.1/5.2/5.3 binary chunk disassembler
     LuaScope was inspired by Jein-Hong Man's ChunkSpy
 --]]
 
@@ -317,6 +317,9 @@ Oconfig = {
     GetSign          =  function (self)
                             return config.SIGNATURE
                         end,
+    GetFormat        =  function (self)
+                            return config.FORMAT
+                        end,
     GetTypeNIL       =  function (self)
                             return GetTypeNIL()
                         end,
@@ -388,6 +391,47 @@ Oconfig = {
                         end,
     GetLuaSize_OP     = function (self)
                             return config.SIZE_OP
+                        end,
+    GetLuavm_Size_Int   = function (self)
+                            return config.size_int
+                        end,
+    GetLuavm_Size_Sizet = function (self)
+                            return config.size_size_t
+                        end,
+    GetLuavm_Size_Instruction = function (self)
+                            return config.size_Instruction
+                        end,
+    GetLuavm_Size_Number = function (self)
+                            return config.size_lua_Number
+                        end,
+    SetLuavm_Size_Int    = function (self, v)
+                            config.size_int = v
+                        end,
+    SetLuavm_Size_Sizet  = function (self, v)
+                            config.size_size_t = v
+                        end,
+    SetLuavm_Size_Instruction = function (self, v)
+                            config.size_Instruction = v
+                        end,
+    SetLuavm_Size_Number = function (self, v)
+                            config.size_lua_Number = v
+                        end,
+    GetLuavmSizeTbl      = function (self, type)
+                            l = {}
+                            l["int"] = {}
+                            l["int"]["get"] = self.GetLuavm_Size_Int
+                            l["int"]["set"] = self.SetLuavm_Size_Int
+                            l["size_t"] = {}
+                            l["size_t"]["get"] = self.GetLuavm_Size_Sizet
+                            l["size_t"]["set"] = self.SetLuavm_Size_Sizet
+                            l["Instruction"] = {}
+                            l["Instruction"]["get"] = self.GetLuavm_Size_Instruction
+                            l["Instruction"]["set"] = self.SetLuavm_Size_Instruction
+                            l["number"] = {}
+                            l["number"]["get"] = self.GetLuavm_Size_Number
+                            l["number"]["set"] = self.SetLuavm_Size_Number
+
+                            return l[type]
                         end,
     GetLuaFPF         = function (self)
                             return config.FPF

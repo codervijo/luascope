@@ -2,7 +2,7 @@
 
 --[[
     Decode Instructions for Lua Scope
-    A Lua 5.1 binary chunk disassembler
+    A Lua 5.1/5.2/5.3 binary chunk disassembler
     LuaScope was inspired by Jein-Hong Man's ChunkSpy
 --]]
 
@@ -23,7 +23,7 @@ l51vm = {}
 -----------------------------------------------------------------------
   Visually, an instruction can be represented as one of:
 
-   31      |     |     |         0  bit position
+   31     |     |     |          0  bit position
     +-----+-----+-----+----------+
     |  B  |  C  |  A  |  Opcode  |  iABC format
     +-----+-----+-----+----------+

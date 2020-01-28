@@ -2,7 +2,7 @@
 
 --[[
     Decode Chunks for Lua Scope
-    A Lua 5.1 binary chunk disassembler
+    A Lua 5.1/5.2/5.3 binary chunk disassembler
     LuaScope was inspired by Jein-Hong Man's ChunkSpy
 --]]
 
@@ -930,17 +930,18 @@ function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
     return ver
 end
 
-function CheckFormat(size, idx, chunk, func_movetonext)
+function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
     IsChunkSizeOk(1, idx, size, "format byte")
     format = LoadByte(chunk, idx, func_movetonext)
-    if format ~= config.FORMAT then
+    if format ~= oconfig:GetFormat() then
         error(string.format("Dechunk cannot read format %02X chunks", format))
     end
 
     return format
 end
 
-function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
+function CheckEndianness(size, idx, chunk, func_movetonext,
+                         oconfig)
     IsChunkSizeOk(1, idx, size, "endianness byte")
     local endianness = LoadByte(chunk, idx, func_movetonext)
     if not oconfig:GetConfigDetect() then
@@ -954,16 +955,18 @@ function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
     return endianness
 end
 
-function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, typename, oconfig)
+function CheckSizes(size, idx, previdx, chunk, func_movetonext,
+                    mysize, sizename, oconfig)
     IsChunkSizeOk(4, idx, size, "size bytes")
     local byte = LoadByte(chunk, idx, func_movetonext)
+    lt = oconfig:GetLuavmSizeTbl(sizename)["get"]
     if not oconfig:GetConfigDetect() then
-        if byte ~= config[mysize] then
+        if byte ~= lt() then
             error(string.format("mismatch in %s size (needs %d but read %d)",
-                  sizename, config[mysize], byte))
+                  sizename, lt(), byte))
         end
     else
-        config[mysize] = byte
+        lt.set(byte)
     end
 end
 
@@ -992,7 +995,8 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_movetonext, oconfig)
+function LuaChunkHeader(size, name, chunk, result, idx,
+                        previdx, stat, func_movetonext, oconfig)
     local chunkdets = {}
 
     local function MoveToNextTok(size)
@@ -1019,7 +1023,8 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     --
     -- test version
     --
-    result.version = CheckVersion(size, idx, chunk, MoveToNextTok, oconfig)
+    result.version = CheckVersion(size, idx, chunk,
+                                  MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
     chunkdets.version  = result.version
 
@@ -1028,13 +1033,15 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     -- * Dechunk does not accept anything other than 0. For custom
     -- * binary chunks, modify Dechunk to read it properly.
     --
-    result.format = CheckFormat(size, idx, chunk, MoveToNextTok)
+    result.format = CheckFormat(size, idx, chunk,
+                                MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "format (0=official)", previdx)
 
     --
     -- test endianness
     --
-    endianness = CheckEndianness(size, idx, chunk, MoveToNextTok, oconfig)
+    endianness = CheckEndianness(size, idx, chunk,
+                                MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
     chunkdets.endianness = endianness
 
@@ -1042,18 +1049,22 @@ function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat, func_move
     -- test sizes
     --
     -- byte sizes
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_int", "int", "bytes", oconfig)
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "int", "bytes"),
-               previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_size_t", "size_t", "bytes", oconfig)
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "size_t", "bytes"),
-               previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_Instruction", "Instruction", "bytes", oconfig)
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "Instruction", "bytes"),
-               previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok, "size_lua_Number", "number", "bytes", oconfig)
-    FormatLine(chunk, 1, string.format("size of %s (%s)", "number", "bytes"),
-               previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+               "size_int", "int", oconfig)
+    FormatLine(chunk, 1, string.format("size of %s (%s)",
+               "int", "bytes"), previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+               "size_size_t", "size_t", oconfig)
+    FormatLine(chunk, 1, string.format("size of %s (%s)",
+               "size_t", "bytes"), previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+               "size_Instruction", "Instruction", oconfig)
+    FormatLine(chunk, 1, string.format("size of %s (%s)",
+               "Instruction", "bytes"), previdx)
+    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+               "size_lua_Number", "number", oconfig)
+    FormatLine(chunk, 1, string.format("size of %s (%s)",
+               "number", "bytes"), previdx)
     -- initialize decoder (see the 5.0.2 script if you want to customize
     -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
     DecodeInit(oconfig)
