@@ -202,3 +202,4 @@ function Hexdump(buf)
      if i % 16 == 0 then io.write( buf:sub(i-16+1, i):gsub('%c','.'), '\n' ) end
   end
 end
+

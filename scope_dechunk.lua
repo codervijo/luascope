@@ -13,6 +13,8 @@ require("scope_config")
 -- XXX is a hack, only temporary, hopefully.
 config = get_config()
 
+srcinfo = {}
+
 --
 -- brief display mode with indentation style option
 --
@@ -22,6 +24,93 @@ local function BriefLine(desc)
         WriteLine(string.rep(GetOutputSep(), level - 1)..desc)
     else
         WriteLine(desc)
+    end
+end
+
+--[[
+-- Source listing merging
+-- * for convenience, file name matching is first via case-sensitive
+--   comparison, then case-insensitive comparison, and the first
+--   match found using either method is the one that is used
+--]]
+
+-----------------------------------------------------------------------
+-- initialize source list for merging
+-- * this will normally be called by the main chunk function
+-- * the source listing is read only once, upon initialization
+-----------------------------------------------------------------------
+function SourceInit(source)
+    if srcinfo.source then srcinfo.srcprev = 0; return end
+    if not  source or
+            source == "" or
+            string.sub(source, 1, 1) ~= "@" then
+        return
+    end
+    source = string.sub(source, 2)                -- chomp leading @
+    for _, fname in ipairs(other_files) do        -- find a match
+        if not srcinfo.source then
+            if fname == source or
+               string.lower(fname) == string.lower(source) then
+                srcinfo.source = fname
+            end
+        end
+    end
+    if not srcinfo.source then return end          -- no source file
+    local INF = io.open(srcinfo.source, "rb")      -- read in source file
+    if not INF then
+        error("cannot read file \""..filename.."\"")
+    end
+    srcinfo.srcline = {}; srcinfo.srcmark = {}
+    local n, line = 1
+    repeat
+        line = INF:read("*l")
+        if line then
+            srcinfo.srcline[n], srcinfo.srcmark[n] = line, false
+            n = n + 1
+        end
+    until not line
+    io.close(INF)
+    srcinfo.srcsize = n - 1
+    srcinfo.DISPLAY_SRC_WIDTH = WidthOf(srcinfo.srcsize)
+    srcinfo.srcprev = 0
+end
+
+-----------------------------------------------------------------------
+-- mark source lines
+-- * marks source lines as a function is read to delineate stuff
+-----------------------------------------------------------------------
+function SourceMark(func)
+    if not srcinfo.source then return end
+    if func.sizelineinfo == 0 then return end
+    for i = 1, func.sizelineinfo do
+        if i <= srcinfo.srcsize then
+            srcinfo.srcmark[func.lineinfo[i]] = true
+        end
+    end
+end
+
+-----------------------------------------------------------------------
+-- generate source lines
+-- * peek at lines above and print them if they have not been printed
+-- * mark all printed lines so all non-code lines are printed once only
+-----------------------------------------------------------------------
+function SourceMerge(func, pc)
+    if not srcinfo.source or not srcinfo.DISPLAY_FLAG then return end
+    local lnum = func.lineinfo[pc]
+    -- don't print anything new if instruction is on the same line
+    if srcinfo.srcprev == lnum then return end
+    srcinfo.srcprev = lnum
+    if srcinfo.srcsize < lnum then return end      -- something fishy
+    local lfrom = lnum
+    srcinfo.srcmark[lnum] = true
+    while lfrom > 1 and srcinfo.srcmark[lfrom - 1] == false do
+        lfrom = lfrom - 1
+        srcinfo.srcmark[lfrom] = true
+    end
+    for i = lfrom, lnum do
+        WriteLine(GetOutputComment()
+          .."("..ZeroPad(i, srcinfo.DISPLAY_SRC_WIDTH)..")"
+          ..srcinfo.DISPLAY_SEP..srcinfo.srcline[i])
     end
 end
 

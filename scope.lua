@@ -9,7 +9,7 @@
 
 title = [[
 LuaScope: A Lua debugger/disassembler
-Version 0.0.0 (20190215)  Copyright (c) 2019-2020 Vijo Cherian
+Version 0.0.1 (20200210)  Copyright (c) 2019-2020 Vijo Cherian
 The COPYRIGHT file describes the conditions under which this
 software may be distributed (basically a Lua 5-style license.)
 ]]
@@ -59,92 +59,6 @@ convert_from = get_convert_from()
 -- initialize display formatting settings
 -- * chunk_size parameter used to set width of position column
 --
-
-
---[[
--- Source listing merging
--- * for convenience, file name matching is first via case-sensitive
---   comparison, then case-insensitive comparison, and the first
---   match found using either method is the one that is used
---]]
-
------------------------------------------------------------------------
--- initialize source list for merging
--- * this will normally be called by the main chunk function
--- * the source listing is read only once, upon initialization
------------------------------------------------------------------------
-function SourceInit(source)
-	if config.source then config.srcprev = 0; return end
-	if not source or source == "" or
-	string.sub(source, 1, 1) ~= "@" then
-		return
-	end
-	source = string.sub(source, 2)                -- chomp leading @
-	for _, fname in ipairs(other_files) do        -- find a match
-		if not config.source then
-			if fname == source or
-			 string.lower(fname) == string.lower(source) then
-				config.source = fname
-			end
-		end
-	end
-	if not config.source then return end          -- no source file
-	local INF = io.open(config.source, "rb")      -- read in source file
-	if not INF then
-		error("cannot read file \""..filename.."\"")
-	end
-	config.srcline = {}; config.srcmark = {}
-	local n, line = 1
-	repeat
-		line = INF:read("*l")
-		if line then
-			config.srcline[n], config.srcmark[n] = line, false
-			n = n + 1
-		end
-	until not line
-	io.close(INF)
-	config.srcsize = n - 1
-	config.DISPLAY_SRC_WIDTH = WidthOf(config.srcsize)
-	config.srcprev = 0
-end
------------------------------------------------------------------------
--- mark source lines
--- * marks source lines as a function is read to delineate stuff
------------------------------------------------------------------------
-function SourceMark(func)
-	if not config.source then return end
-	if func.sizelineinfo == 0 then return end
-	for i = 1, func.sizelineinfo do
-		if i <= config.srcsize then
-			config.srcmark[func.lineinfo[i]] = true
-		end
-	end
-end
-
------------------------------------------------------------------------
--- generate source lines
--- * peek at lines above and print them if they have not been printed
--- * mark all printed lines so all non-code lines are printed once only
------------------------------------------------------------------------
-function SourceMerge(func, pc)
-	if not config.source or not config.DISPLAY_FLAG then return end
-	local lnum = func.lineinfo[pc]
-	-- don't print anything new if instruction is on the same line
-	if config.srcprev == lnum then return end
-	config.srcprev = lnum
-	if config.srcsize < lnum then return end      -- something fishy
-	local lfrom = lnum
-	config.srcmark[lnum] = true
-	while lfrom > 1 and config.srcmark[lfrom - 1] == false do
-		lfrom = lfrom - 1
-		config.srcmark[lfrom] = true
-	end
-	for i = lfrom, lnum do
-		WriteLine(GetOutputComment()
-		  .."("..ZeroPad(i, config.DISPLAY_SRC_WIDTH)..")"
-		  ..config.DISPLAY_SEP..config.srcline[i])
-	end
-end
 
 function main()
     print("Found Lua Version", _VERSION)
