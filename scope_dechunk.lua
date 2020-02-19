@@ -1126,6 +1126,17 @@ function LuaChunkHeader(size, name, chunk, result, idx,
                                 MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "format (0=official)", previdx)
 
+if chunkdets.version == 83 then
+    local cfg_LUAC_DATA = "\25\147\r\n\26\n"
+    local len = 6
+    local LUAC_DATA = LoadBlock(len, chunk, true)
+    --if LUAC_DATA ~= cfg_LUAC_DATA then
+        --error("header LUAC_DATA not found, this is not a Lua chunk")
+    --end
+    FormatLine(chunk, len, "LUAC_DATA: <TO DO>  ", previdx)
+    MoveIdxLen(6)
+else
+
     --
     -- test endianness
     --
@@ -1133,6 +1144,10 @@ function LuaChunkHeader(size, name, chunk, result, idx,
                                 MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
     chunkdets.endianness = endianness
+end
+
+        Hexdump(chunk)
+
 
     --
     -- test sizes
@@ -1206,7 +1221,9 @@ function Dechunk(chunk_name, chunk, oconfig)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name, chunk, result, idx, previdx, stat, MoveToNextTok, oconfig)
+    idx, previdx, dets = LuaChunkHeader(result.chunk_size, result.chunk_name,
+                                        chunk, result, idx, previdx,
+                                        stat, MoveToNextTok, oconfig)
 
     if dets.version == 81 then
         --
