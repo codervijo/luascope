@@ -369,6 +369,7 @@ end
 -- * rest of code assumes little-endian by default
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
+    --print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     if func_movetonext ~= nil then
         func_movetonext(size)
@@ -1128,12 +1129,14 @@ function LuaChunkHeader(size, name, chunk, result, idx,
 
 if chunkdets.version == 83 then
     local cfg_LUAC_DATA = "\25\147\r\n\26\n"
-    local len = 6
-    local LUAC_DATA = LoadBlock(len, chunk, true)
-    --if LUAC_DATA ~= cfg_LUAC_DATA then
-        --error("header LUAC_DATA not found, this is not a Lua chunk")
-    --end
-    FormatLine(chunk, len, "LUAC_DATA: <TO DO>  ", previdx)
+    local len = string.len(cfg_LUAC_DATA)
+    --print("Length of LUAC_DATA is ",len)
+    local LUAC_DATA = LoadBlock(len, chunk, size, idx, func_movetonext)
+    --print("Read Luac_data as", LUAC_DATA)
+    if LUAC_DATA ~= cfg_LUAC_DATA then
+        error("header LUAC_DATA not found, this is not a Lua chunk")
+    end
+    FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, previdx)
     MoveIdxLen(6)
 else
 
@@ -1146,7 +1149,7 @@ else
     chunkdets.endianness = endianness
 end
 
-        Hexdump(chunk)
+    Hexdump(chunk)
 
 
     --
@@ -1245,7 +1248,6 @@ function Dechunk(chunk_name, chunk, oconfig)
         result.desc = Load52Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
         DescFunction(chunk, result.desc, 0, 1, oconfig)
     elseif dets.version == 83 then
-
         --
         -- Lua Version 5.3
         --
