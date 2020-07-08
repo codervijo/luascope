@@ -1196,22 +1196,22 @@ end
     end
 
     --- TODO Next : convert the following into luascope mechanism
-    [[  ---------------------------------------------------------------
+    ---------------------------------------------------------------
     -- test endianness
     -- LUAC_INT = 0x5678 in lua 5.3
     ---------------------------------------------------------------
     TestChunk(8, idx, "endianness bytes")
     local endianness_bytes = LoadBlock(8)
     local endianness_value = convert_from_int(endianness_bytes, 8)
-    --[[
-    if not config.AUTO_DETECT then
-      if endianness ~= config.endianness then
-        error("unsupported endianness")
-      end
-    else
-      config.endianness = endianness
-    end
-    --] ]
+    --
+    --if not config.AUTO_DETECT then
+    --  if endianness ~= config.endianness then
+    --    error("unsupported endianness")
+    --  end
+    --else
+    --  config.endianness = endianness
+    --end
+    --
     FormatLine(8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
   
     ---------------------------------------------------------------
@@ -1230,7 +1230,7 @@ end
     -- end of global header
     stat.header = idx - 1
     DisplayStat("* global header = "..stat.header.." bytes")
-    DescLine("** global header end **")]]
+    DescLine("** global header end **")
 
     init_scope_config_description()
     DescLine("* "..oconfig:GetLuaDescription())
@@ -1243,12 +1243,12 @@ end
     return idx, previdx, chunkdets
 end
 
---[[
+--
 -- Dechunk main processing function
 -- * in order to maintain correct positional order, the listing will
 --   show functions as nested; a level number is kept to help the
 --   user trace the extent of functions in the listing
---]]
+--
 
 function Dechunk(chunk_name, chunk, oconfig)
     ---------------------------------------------------------------
