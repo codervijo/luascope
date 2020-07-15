@@ -1151,7 +1151,6 @@ end
 
     Hexdump(chunk)
 
-
     --
     -- test sizes
     --
@@ -1193,44 +1192,45 @@ end
         GetLuaIntSize()
         CheckLuaNumber(oconfig)
         DescLine("* number type: "..oconfig:GetLuaNumberType())
+
+        --- TODO Next : convert the following into luascope mechanism
+        ---------------------------------------------------------------
+        -- test endianness
+        -- LUAC_INT = 0x5678 in lua 5.3
+        ---------------------------------------------------------------
+        TestChunk(8, idx, "endianness bytes")
+        local endianness_bytes = LoadBlock(8)
+        local endianness_value = convert_from_int(endianness_bytes, 8)
+        --
+        --if not config.AUTO_DETECT then
+        --  if endianness ~= config.endianness then
+        --    error("unsupported endianness")
+        --  end
+        --else
+        --  config.endianness = endianness
+        --end
+        --
+        FormatLine(8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
+      
+        ---------------------------------------------------------------
+        -- test endianness
+        -- LUAC_NUM = cast_num(370.5) in lua 5.3
+        ---------------------------------------------------------------
+        TestChunk(8, idx, "float format bytes")
+        local float_format_bytes = LoadBlock(8)
+        local float_format_value = convert_from_double(float_format_bytes)
+        FormatLine(8, "float format "..float_format_value, previdx)
+      
+        TestChunk(1, idx, "global closure nupvalues")
+        local global_closure_nupvalues = LoadByte()
+        FormatLine(1, "global closure nupvalues "..global_closure_nupvalues, previdx)
+  
+        -- end of global header
+        stat.header = idx - 1
+        DisplayStat("* global header = "..stat.header.." bytes")
+        DescLine("** global header end **")
     end
 
-    --- TODO Next : convert the following into luascope mechanism
-    ---------------------------------------------------------------
-    -- test endianness
-    -- LUAC_INT = 0x5678 in lua 5.3
-    ---------------------------------------------------------------
-    TestChunk(8, idx, "endianness bytes")
-    local endianness_bytes = LoadBlock(8)
-    local endianness_value = convert_from_int(endianness_bytes, 8)
-    --
-    --if not config.AUTO_DETECT then
-    --  if endianness ~= config.endianness then
-    --    error("unsupported endianness")
-    --  end
-    --else
-    --  config.endianness = endianness
-    --end
-    --
-    FormatLine(8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
-  
-    ---------------------------------------------------------------
-    -- test endianness
-    -- LUAC_NUM = cast_num(370.5) in lua 5.3
-    ---------------------------------------------------------------
-    TestChunk(8, idx, "float format bytes")
-    local float_format_bytes = LoadBlock(8)
-    local float_format_value = convert_from_double(float_format_bytes)
-    FormatLine(8, "float format "..float_format_value, previdx)
-  
-    TestChunk(1, idx, "global closure nupvalues")
-    local global_closure_nupvalues = LoadByte()
-    FormatLine(1, "global closure nupvalues "..global_closure_nupvalues, previdx)
-  
-    -- end of global header
-    stat.header = idx - 1
-    DisplayStat("* global header = "..stat.header.." bytes")
-    DescLine("** global header end **")
 
     init_scope_config_description()
     DescLine("* "..oconfig:GetLuaDescription())
