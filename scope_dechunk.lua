@@ -369,7 +369,7 @@ end
 -- * rest of code assumes little-endian by default
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
-    --print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
+    print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     if func_movetonext ~= nil then
         func_movetonext(size)
@@ -1223,12 +1223,13 @@ end
             error("could not find conversion function for double")
         end
         IsChunkSizeOk(8, idx, size, "float format bytes")
-        local float_format_bytes = LoadBlock(8)
+        local float_format_bytes = LoadBlock(8, chunk, size, idx, func_movetonext)
+        print("float bytes"..float_format_bytes)
         local float_format_value = convert_from_double(float_format_bytes)
-        FormatLine(chunk, 8, "float format "..float_format_value, previdx)
+        FormatLine(chunk, 8, "fl(oat format "..float_format_value, previdx)
       
         IsChunkSizeOk(1, idx, size, "global closure nupvalues")
-        local global_closure_nupvalues = LoadByte()
+        local global_closure_nupvalues = LoadByte(chunk, idx, func_movetonext)
         FormatLine(chunk, 1, "global closure nupvalues "..global_closure_nupvalues, previdx)
   
         -- end of global header
