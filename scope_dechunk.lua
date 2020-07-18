@@ -1030,8 +1030,7 @@ function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
     return format
 end
 
-function CheckEndianness(size, idx, chunk, func_movetonext,
-                         oconfig)
+function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
     IsChunkSizeOk(1, idx, size, "endianness byte")
     local endianness = LoadByte(chunk, idx, func_movetonext)
     if not oconfig:GetConfigDetect() then
@@ -1045,8 +1044,7 @@ function CheckEndianness(size, idx, chunk, func_movetonext,
     return endianness
 end
 
-function CheckSizes(size, idx, previdx, chunk, func_movetonext,
-                    mysize, sizename, oconfig)
+function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, oconfig)
     IsChunkSizeOk(4, idx, size, "size bytes")
     local byte = LoadByte(chunk, idx, func_movetonext)
     lt = oconfig:GetLuavmSizeTbl(sizename)["get"]
@@ -1085,8 +1083,8 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(size, name, chunk, result, idx,
-                        previdx, stat, func_movetonext, oconfig)
+function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat,
+                        func_movetonext, oconfig)
     local chunkdets = {}
 
     local function MoveToNextTok(size)
@@ -1198,8 +1196,12 @@ end
         -- test endianness
         -- LUAC_INT = 0x5678 in lua 5.3
         ---------------------------------------------------------------
-        TestChunk(8, idx, "endianness bytes")
-        local endianness_bytes = LoadBlock(8)
+        local convert_from_int = convert_from["int"]
+        if not convert_from_int then
+            error("could not find conversion function for int")
+        end
+        IsChunkSizeOk(8, idx, size, "endianness bytes")
+        local endianness_bytes = LoadBlock(8, chunk, size, idx, func_movetonext)
         local endianness_value = convert_from_int(endianness_bytes, 8)
         --
         --if not config.AUTO_DETECT then
@@ -1210,20 +1212,24 @@ end
         --  config.endianness = endianness
         --end
         --
-        FormatLine(8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
+        FormatLine(chunk, 8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
       
         ---------------------------------------------------------------
         -- test endianness
         -- LUAC_NUM = cast_num(370.5) in lua 5.3
         ---------------------------------------------------------------
-        TestChunk(8, idx, "float format bytes")
+        local convert_from_double = convert_from["double"]
+        if not convert_from_double then
+            error("could not find conversion function for double")
+        end
+        IsChunkSizeOk(8, idx, size, "float format bytes")
         local float_format_bytes = LoadBlock(8)
         local float_format_value = convert_from_double(float_format_bytes)
-        FormatLine(8, "float format "..float_format_value, previdx)
+        FormatLine(chunk, 8, "float format "..float_format_value, previdx)
       
-        TestChunk(1, idx, "global closure nupvalues")
+        IsChunkSizeOk(1, idx, size, "global closure nupvalues")
         local global_closure_nupvalues = LoadByte()
-        FormatLine(1, "global closure nupvalues "..global_closure_nupvalues, previdx)
+        FormatLine(chunk, 1, "global closure nupvalues "..global_closure_nupvalues, previdx)
   
         -- end of global header
         stat.header = idx - 1
