@@ -1201,8 +1201,9 @@ end
             error("could not find conversion function for int")
         end
         IsChunkSizeOk(8, idx, size, "endianness bytes")
-        local endianness_bytes = LoadBlock(8, chunk, size, idx, func_movetonext)
+        local endianness_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
         local endianness_value = convert_from_int(endianness_bytes, 8)
+        --MoveToNextTok(size)
         --
         --if not config.AUTO_DETECT then
         --  if endianness ~= config.endianness then
@@ -1222,14 +1223,15 @@ end
         if not convert_from_double then
             error("could not find conversion function for double")
         end
+        print("Total Size"..size.."Current index"..idx)
         IsChunkSizeOk(8, idx, size, "float format bytes")
-        local float_format_bytes = LoadBlock(8, chunk, size, idx, func_movetonext)
-        print("float bytes"..float_format_bytes)
+        local float_format_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
+        print("float bytes "..float_format_bytes)
         local float_format_value = convert_from_double(float_format_bytes)
-        FormatLine(chunk, 8, "fl(oat format "..float_format_value, previdx)
+        FormatLine(chunk, 8, "float format "..float_format_value, previdx)
       
         IsChunkSizeOk(1, idx, size, "global closure nupvalues")
-        local global_closure_nupvalues = LoadByte(chunk, idx, func_movetonext)
+        local global_closure_nupvalues = LoadByte(chunk, idx, MoveToNextTok)
         FormatLine(chunk, 1, "global closure nupvalues "..global_closure_nupvalues, previdx)
   
         -- end of global header
