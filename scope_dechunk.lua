@@ -369,7 +369,7 @@ end
 -- * rest of code assumes little-endian by default
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
-    print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
+    --print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     if func_movetonext ~= nil then
         func_movetonext(size)
@@ -1236,7 +1236,7 @@ end
   
         -- end of global header
         stat.header = idx - 1
-        DisplayStat("* global header = "..stat.header.." bytes")
+        DisplayStat("* global header = "..stat.header.." bytes", oconfig)
         DescLine("** global header end **")
     end
 
