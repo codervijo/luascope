@@ -456,13 +456,16 @@ end
 -- load a string (size, data pairs)
 --
 local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+    print("Trying to load string at idx "..idx.." from total size "..total_size)
     local len = LoadSize(chunk, total_size, idx, func_movetonext)
     if not len then
         error("could not load String")
     else
         if len == 0 then        -- there is no error, return a nil
+            print("0-sized string at location "..idx )
             return nil
         end
+        print("Size in string: "..len.." "..string.format("%x", len))
         idx = idx + GetLuaSizetSize() -- idx was incremented in our caller
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
@@ -494,6 +497,31 @@ local function SizeLoadString(chunk, total_size, idx)
         --return s
         return len
     end
+end
+
+local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_moveidx)
+      local len = LoadByte(chunk, ix, func_movetonext)
+      local islngstr = nil
+      if not len then
+        error("could not load String")
+        return
+      end
+      if len == 255 then
+        len = LoadSize(chunk, total_size, idx)
+        islngstr = true
+      end
+      if len == 0 then        -- there is no error, return a nil
+        return nil, len, islngstr
+      end
+      if len == 1 then
+        return "", len, islngstr
+      end
+      --TestChunk(len - 1, idx, "LoadString")
+      IsChunkSizeOk(len, idx, total_size, "LoadString")
+      local s = string.sub(chunk, idx, idx + len - 2)
+      --idx = idx + len - 1
+      func_moveidx(len)
+      return s, len, islngstr
 end
 
 --
@@ -893,14 +921,14 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
         idx = idx + len
     end
 
-    local function Check52Signature(size, idx, chunk)
-        local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
+    local function CheckLuaSignature(size, idx, chunk)
+        local lua53signature = "\x19\x93\x0d\x0a\x1a\x0a"
 
-        len = string.len(lua52signature)
-        IsChunkSizeOk(len, idx, size, "lua52 signature")
+        len = string.len(lua53signature)
+        IsChunkSizeOk(len, idx, size, "lua53 signature")
 
-        if string.sub(chunk, idx, len) ~= lua52signature then
-            print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
+        if string.sub(chunk, idx, len) ~= lua53signature then
+            print("Lua 5.3 signature not found, this is not a Lua5.3 chunk")
         end
 
         return idx+len
@@ -916,17 +944,22 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
         desc.stat[item] = idx - start
         start = idx
     end
-    print("Loading string at "..idx)
+    print("Loading string at "..idx.." 0x"..string.format("%x", idx))
     Hexdump(chunk)
     previdx = idx
-    idx = Check52Signature(total_size, idx, chunk)
+    --idx = CheckLuaSignature(total_size, idx, chunk)
+    local str = {}
+    --desc.source 
+    str.val, str.len, str.islong= LoadLua53String(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    print("Source code: ", str.val, str.len)
+    desc.pos_source = previdx
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Pos :".. desc.linedefined)
+    print("Pos :".. desc.linedefined.." 0x"..string.format("%x", desc.linedefined))
     desc.pos_linedefined = previdx
     desc.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
-    print("Last line :"..desc.lastlinedefined)
+    print("Last line :"..desc.lastlinedefined.." 0x"..string.format("%x", desc.lastlinedefined))
     print "1"
 
     -------------------------------------------------------------
