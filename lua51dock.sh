@@ -8,6 +8,8 @@ CONTAINER=lua51
 # Make symlink to docker for this dev environment
 ln -sf b2b/apps/${CONTAINER}/Dockerfile .
 
-
-sudo docker build -t ${CONTAINER} .
+if [[ "$(sudo docker images -q ${CONTAINER}:latest 2>/dev/null)" == "" ]];
+then
+	sudo docker build -t ${CONTAINER} .
+fi
 sudo docker run -v $PWD:/usr/src/ --rm  -it ${CONTAINER} lua /usr/src/scope.lua
