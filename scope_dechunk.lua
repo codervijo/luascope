@@ -364,12 +364,17 @@ local function LoadByte(chunk, previdx, func_movetonext)
     return string.byte(chunk, previdx)
 end
 
+local function LoadByte53(chunk, idx, func_moveidx)
+    func_moveidx(1)
+    return string.byte(chunk, idx)
+end
+
 --
 -- loads a block of endian-sensitive bytes
 -- * rest of code assumes little-endian by default
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
-    --print("Checking for size"..size.."total size"..total_size.."Idx starts at "..idx)
+    print("LoadBlock Checking for size "..size.." total size "..total_size.." Idx starts at "..idx)
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     if func_movetonext ~= nil then
         func_movetonext(size)
@@ -500,14 +505,16 @@ local function SizeLoadString(chunk, total_size, idx)
 end
 
 local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_moveidx)
-      local len = LoadByte(chunk, ix, func_movetonext)
+      print("idx: "..idx)
+      local len = LoadByte53(chunk, idx+1, func_moveidx)
       local islngstr = nil
       if not len then
         error("could not load String")
         return
       end
+      print("len "..len) 
       if len == 255 then
-        len = LoadSize(chunk, total_size, idx)
+        len = LoadSize(chunk, total_size, idx, func_movetonext)
         islngstr = true
       end
       if len == 0 then        -- there is no error, return a nil
@@ -517,10 +524,11 @@ local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_mov
         return "", len, islngstr
       end
       --TestChunk(len - 1, idx, "LoadString")
-      IsChunkSizeOk(len, idx, total_size, "LoadString")
-      local s = string.sub(chunk, idx, idx + len - 2)
+      IsChunkSizeOk(len, idx+1, total_size, "LoadString")
+      local s = string.sub(chunk, idx+1, idx + len)
       --idx = idx + len - 1
       func_moveidx(len)
+      print("Loaded string at idx "..idx.. " of length "..len .. ">"..s.."<")
       return s, len, islngstr
 end
 
@@ -950,9 +958,11 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     --idx = CheckLuaSignature(total_size, idx, chunk)
     local str = {}
     --desc.source 
+    print("idx: "..idx.." previdx: "..previdx)
     str.val, str.len, str.islong= LoadLua53String(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
     print("Source code: ", str.val, str.len)
     desc.pos_source = previdx
+    print("idx: "..idx.." previdx: "..previdx)
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
@@ -972,11 +982,11 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     SetStat("header")
     print("Num params :"..desc.numparams)
     print("Max stack size :"..desc.maxstacksize)
-    print "2"
+    print "3"
 
     -- load parts of a chunk
     LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
-    print "2.4"
+    print "3.4"
     LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
     --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
     --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
