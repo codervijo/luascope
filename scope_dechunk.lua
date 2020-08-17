@@ -374,7 +374,7 @@ end
 -- * rest of code assumes little-endian by default
 --
 local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
-    print("LoadBlock Checking for size "..size.." total size "..total_size.." Idx starts at "..idx)
+    print("LoadBlock Checking for size "..size.." total size "..total_size.." Idx starts at "..string.format("%x", idx))
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
     if func_movetonext ~= nil then
         func_movetonext(size)
@@ -430,7 +430,7 @@ local function LoadSize(chunk, total_size, idx, func_movetonext)
     local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
     if not x then
         print("total_size was ", total_size)
-        error("could not load size_t at "..idx) --handled in LoadString()
+        error("could not load size_t at "..string.format("%x", idx)) --handled in LoadString()
         return
     else
         local sum = 0
@@ -461,13 +461,13 @@ end
 -- load a string (size, data pairs)
 --
 local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
-    print("Trying to load string at idx "..idx.." from total size "..total_size)
+    print("Trying to load string at idx "..string.format("%x", idx).." from total size "..total_size)
     local len = LoadSize(chunk, total_size, idx, func_movetonext)
     if not len then
         error("could not load String")
     else
         if len == 0 then        -- there is no error, return a nil
-            print("0-sized string at location "..idx )
+            print("0-sized string at location "..string.format("%x", idx) )
             return nil
         end
         print("Size in string: "..len.." "..string.format("%x", len))
@@ -476,7 +476,7 @@ local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len )
         func_moveidx(len)
-        print("Loading string at idx "..idx.. " of length "..len .. ">"..s.."<")
+        print("Loading string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
         Hexdump(s)
         return s
     end
@@ -497,7 +497,7 @@ local function SizeLoadString(chunk, total_size, idx)
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len)
-        print("Size of String to Load at idx "..idx.. " of length "..len..s)
+        print("Size of String to Load at idx "..string.format("%x", idx).. " of length "..len..s)
         Hexdump(s)
         --return s
         return len
@@ -505,14 +505,14 @@ local function SizeLoadString(chunk, total_size, idx)
 end
 
 local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_moveidx)
-      print("idx: "..idx)
+      print("idx: "..string.format("%x", idx))
       local len = LoadByte53(chunk, idx+1, func_moveidx)
       local islngstr = nil
       if not len then
         error("could not load String")
         return
       end
-      print("len "..len) 
+      print("Lua53string of len "..len.." at idx "..string.format("%x", idx)) 
       if len == 255 then
         len = LoadSize(chunk, total_size, idx, func_movetonext)
         islngstr = true
@@ -528,7 +528,7 @@ local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_mov
       local s = string.sub(chunk, idx+1, idx + len)
       --idx = idx + len - 1
       func_moveidx(len)
-      print("Loaded string at idx "..idx.. " of length "..len .. ">"..s.."<")
+      print("Loaded string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
       return s, len, islngstr
 end
 
@@ -634,7 +634,7 @@ end
 --
 local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, desc)
     local size = LoadInt(chunk, total_size, idx, func_movetonext)
-    print("Loading instructions of Size", size)
+    print("Loading instructions of Size "..size.." at idx "..string.format("%x", idx))
     desc.pos_code = previdx
     desc.code = {}
     desc.sizecode = size
@@ -653,7 +653,7 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
     desc.sizek = n
     desc.posk = {}
     pidx = idx
-    ix = idx + GetLuaIntSize()
+    ix = idx + GetLuaIntSize()  + 0
     print("Loading "..n.." constants")
     for i = 1, n do
         local t = LoadByte(chunk, ix, func_movetonext)
@@ -670,7 +670,10 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
             desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string")
-            desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
+            ix = ix - 1
+            pidx = pidx - 1
+            --desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
+            desc.k[i] = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
             local strsize = SizeLoadString(chunk, total_size, ix)
             ix = ix + GetLuaSizetSize() + strsize
             pidx = pidx + GetLuaSizetSize() + strsize
@@ -746,7 +749,7 @@ function Load51Function(chunk, total_size, ix, pix, funcname, num, level)
     end
 
     -- source file name
-    print("Loading string at "..idx)
+    print("Loading string at "..string.format("%x", idx))
     desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
     desc.pos_source = previdx
     if desc.source == "" and level == 1 then desc.source = funcname end
@@ -829,7 +832,7 @@ function Load52Function(chunk, total_size, ix, pix, funcname, num, level)
         desc.stat[item] = idx - start
         start = idx
     end
-    print("Loading string at "..idx)
+    print("Loading string at "..string.format("%x", idx))
     Hexdump(chunk)
     previdx = idx
     idx = Check52Signature(total_size, idx, chunk)
@@ -952,17 +955,17 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
         desc.stat[item] = idx - start
         start = idx
     end
-    print("Loading string at "..idx.." 0x"..string.format("%x", idx))
+    print("Loading string at "..string.format("%x", idx).." 0x"..string.format("%x", idx))
     Hexdump(chunk)
     previdx = idx
     --idx = CheckLuaSignature(total_size, idx, chunk)
     local str = {}
     --desc.source 
-    print("idx: "..idx.." previdx: "..previdx)
+    print("idx: "..string.format("%x", idx).." previdx: "..previdx)
     str.val, str.len, str.islong= LoadLua53String(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
     print("Source code: ", str.val, str.len)
     desc.pos_source = previdx
-    print("idx: "..idx.." previdx: "..previdx)
+    print("idx: "..string.format("%x", idx).." previdx: "..previdx)
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
@@ -981,12 +984,14 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
     SetStat("header")
     print("Num params :"..desc.numparams)
-    print("Max stack size :"..desc.maxstacksize)
+    print("Max stack size :"..desc.maxstacksize.." idx "..string.format("%x", idx))
     print "3"
 
     -- load parts of a chunk
     LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
     print "3.4"
+    print("idx "..string.format("%x", idx))
+    Hexdump(string.sub(chunk, idx, idx+32))
     LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
     --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
     --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
@@ -1266,7 +1271,7 @@ end
         if not convert_from_double then
             error("could not find conversion function for double")
         end
-        print("Total Size"..size.."Current index"..idx)
+        print("Total Size"..size.."Current index"..string.format("%x", idx))
         IsChunkSizeOk(8, idx, size, "float format bytes")
         local float_format_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
         print("float bytes "..float_format_bytes)
