@@ -610,6 +610,27 @@ end
 --
 -- load upvalues information
 --
+local function Load53Upvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    print("No of Upvalues", n)
+    desc.pos_upvalues = previdx
+    desc.upvalues = {}
+    desc.sizeupvalues = n
+    desc.posupvalues = {}
+    for i = 1, n do
+        local upvalue = {}
+        upvalue.instack = LoadByte(chunk, ix, func_movetonext)
+        upvalue.pos_instack = previdx
+        upvalue.idx = LoadByte(chunk, ix, func_movetonext)
+        upvalue.pos_idx = previdx
+        desc.upvalues[i] = upvalue
+    end
+    print("Read n bytes for upvalue", y)
+end
+
+--
+-- load upvalues information
+--
 local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
     if n ~= 0 and n~= desc.nups then
@@ -664,19 +685,62 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
             print("Got Number")
             desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
-            print("Got boolan")
+            print("Got boolean")
             local b = LoadByte(chunk, ix, func_movetonext)
             if b == 0 then b = false else b = true end
             desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string")
-            ix = ix - 1
-            pidx = pidx - 1
-            --desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
-            desc.k[i] = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
+            desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
             local strsize = SizeLoadString(chunk, total_size, ix)
             ix = ix + GetLuaSizetSize() + strsize
             pidx = pidx + GetLuaSizetSize() + strsize
+        elseif t == GetTypeNIL() then
+            print("NIL")
+            desc.k[i] = nil
+        else
+            error(i.." bad constant type "..t.." at "..previdx)
+        end
+    end--for
+end
+
+--
+-- load constants information (data)
+--
+local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
+    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+    desc.pos_ks = previdx
+    desc.k = {}
+    desc.sizek = n
+    desc.posk = {}
+    pidx = idx
+    ix = idx + GetLuaIntSize()  + 0
+    print("Loading "..n.." constants")
+    for i = 1, n do
+        local t = LoadByte(chunk, ix, func_movetonext)
+        pidx = pidx + 1
+        ix = ix + 1
+        desc.posk[i] = pidx
+        if t == GetTypeNumber() then
+            print("Got Number")
+            desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
+        elseif t == GetTypeBoolean() then
+            print("Got boolean")
+            local b = LoadByte(chunk, ix, func_movetonext)
+            if b == 0 then b = false else b = true end
+            desc.k[i] = b
+        elseif t == GetTypeString() then
+            print("Got string")
+            ix = ix - 1  -- FIXME 5.3
+            pidx = pidx - 1  -- FIXME 5.3
+            --desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
+            desc.k[i] = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
+            --local strsize = SizeLoadString(chunk, total_size, ix)  -- FIXME 5.3
+            --ix = ix + GetLuaSizetSize() + strsize  -- FIXME 5.3
+            --pidx = pidx + GetLuaSizetSize() + strsize  -- FIXME 5.3
+            strsize = 7  -- FIXME  5.3
+            ix = ix + strsize  -- FIXME  5.3
+            pidx = pidx + strsize  -- FIXME  5.3
         elseif t == GetTypeNIL() then
             print("NIL")
             desc.k[i] = nil
@@ -992,23 +1056,20 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     print "3.4"
     print("idx "..string.format("%x", idx))
     Hexdump(string.sub(chunk, idx, idx+32))
-    LoadConstantKs(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
-    --LoadConstantPs(chunk, total_size, idx, previdx, MoveToNextTok,func)              SetStat("funcs")
-    --LoadLines(chunk, total_size, idx, previdx, MoveToNextTok,func)
-    LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
-                   --SetStat("fproto")
-                   SetStat("funcs")
-    Hexdump(string.sub(chunk, idx, idx+32))
 
-    Load52Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
-                   SetStat("upvalues")
+    LoadConstantsLua53(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    idx = idx +2 -- FIXME 
+    previdx = previdx + 2 -- FIXME
+    Load53Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+    LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen) SetStat("proto")
 
-    Hexdump(string.sub(chunk, idx, idx+32))
-    --LoadDebug(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)
-    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
-    print("Source code: ", desc.source)
-    desc.pos_source = previdx
-  
+
+
+--    Hexdump(string.sub(chunk, idx, idx+32))
+--    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+--    print("Source code: ", desc.source)
+--    desc.pos_source = previdx
+
     local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
     print("No of Line Numbers:", n)
     desc.lineinfo = {}
@@ -1036,11 +1097,12 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     SetStat("locals")
 
     Hexdump(string.sub(chunk, idx, idx+32))
-    local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
-    print("Goes into scope at instruction:", start)
-    local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
-    print("Goes out of scope at instruction:", stop)
-    desc.nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    --local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    --print("Goes into scope at instruction:", start)
+    --local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    --print("Goes out of scope at instruction:", stop)
+    --desc.nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    desc.nups = 0
     print("No of Upvalues:", nups)
 
     return desc
