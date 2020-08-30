@@ -730,17 +730,12 @@ local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetone
             if b == 0 then b = false else b = true end
             desc.k[i] = b
         elseif t == GetTypeString() then
-            print("Got string")
+            print("Got string at "..string.format("%x", idx))
             ix = ix - 1  -- FIXME 5.3
             pidx = pidx - 1  -- FIXME 5.3
-            --desc.k[i] = LoadString(chunk, total_size, ix, func_movetonext, func_moveidx)
-            desc.k[i] = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
-            --local strsize = SizeLoadString(chunk, total_size, ix)  -- FIXME 5.3
-            --ix = ix + GetLuaSizetSize() + strsize  -- FIXME 5.3
-            --pidx = pidx + GetLuaSizetSize() + strsize  -- FIXME 5.3
-            strsize = 7  -- FIXME  5.3
-            ix = ix + strsize  -- FIXME  5.3
-            pidx = pidx + strsize  -- FIXME  5.3
+            desc.k[i], strsize = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
+            ix = ix + strsize + 1
+            pidx = pidx + strsize + 1
         elseif t == GetTypeNIL() then
             print("NIL")
             desc.k[i] = nil
@@ -1422,9 +1417,3 @@ function Dechunk(chunk_name, chunk, oconfig)
     return result
     -- end of Dechunk
 end
-
-
--- DONE Next step : make sure the values in desc for lua 5.2 makes sense
--- DONE then : Make 5.2 work and make sure 5.1 works too
--- DONE so   : Checkpoint it - may be push to github
--- then : start 5.3 work
