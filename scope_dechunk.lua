@@ -743,6 +743,8 @@ local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetone
             error(i.." bad constant type "..t.." at "..previdx)
         end
     end--for
+
+    return n
 end
 
 --
@@ -1052,18 +1054,11 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     print("idx "..string.format("%x", idx))
     Hexdump(string.sub(chunk, idx, idx+32))
 
-    LoadConstantsLua53(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
-    idx = idx +2 -- FIXME 
-    previdx = previdx + 2 -- FIXME
+    nc  = LoadConstantsLua53(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    idx = idx + nc -- FIXME 
+    previdx = previdx + nc -- FIXME
     Load53Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
     LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen) SetStat("proto")
-
-
-
---    Hexdump(string.sub(chunk, idx, idx+32))
---    desc.source = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
---    print("Source code: ", desc.source)
---    desc.pos_source = previdx
 
     local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
     print("No of Line Numbers:", n)
