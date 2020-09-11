@@ -171,12 +171,14 @@ local function DescLocals(chunk, desc)
     FormatLine(chunk, GetLuaIntSize(), "sizelocvars ("..n..")", desc.pos_locvars)
     for i = 1, n do
         local locvar = desc.locvars[i]
-        DescString(chunk, locvar.varname, locvar.pos_varname)
-        DescLine(chunk, "local ["..(i - 1).."]: "..EscapeString(locvar.varname))
-        BriefLine(".local"..GetOutputSep()..EscapeString(locvar.varname, 1)
-                    ..GetOutputSep()..GetOutputComment()..(i - 1))
-        FormatLine(chunk, GetLuaIntSize(), "  startpc ("..locvar.startpc..")", locvar.pos_startpc)
-        FormatLine(chunk, GetLuaIntSize(), "  endpc   ("..locvar.endpc..")",locvar.pos_endpc)
+        if locvar.pos_varname ~= 0 then -- FIXME hack for 5.3
+            DescString(chunk, locvar.varname, locvar.pos_varname)
+            DescLine(chunk, "local ["..(i - 1).."]: "..EscapeString(locvar.varname))
+            BriefLine(".local"..GetOutputSep()..EscapeString(locvar.varname, 1)
+                        ..GetOutputSep()..GetOutputComment()..(i - 1))
+            FormatLine(chunk, GetLuaIntSize(), "  startpc ("..locvar.startpc..")", locvar.pos_startpc)
+            FormatLine(chunk, GetLuaIntSize(), "  endpc   ("..locvar.endpc..")",locvar.pos_endpc)
+        end
     end
 end
 
@@ -561,7 +563,7 @@ local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, desc
         locvar.startpc = LoadInt(chunk, total_size, idx, func_movetonext)
         locvar.pos_startpc = previdx
         locvar.endpc = LoadInt(chunk, total_size, idx, func_movetonext)
-        lodesccvar.pos_endpc = previdx
+        locvar.pos_endpc = previdx
         desc.locvars[i] = locvar
     end
 end
@@ -1012,6 +1014,8 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     -- statistics handler
     local start = idx
     desc.stat = {}
+    desc.stat.funcs = 0
+    desc.stat.locvars = {}
     local function SetStat(item)
         desc.stat[item] = idx - start
         start = idx
@@ -1059,6 +1063,7 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     previdx = previdx + nc -- FIXME
     Load53Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
     LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen) SetStat("proto")
+    SetStat("funcs")
 
     local n = LoadInt(chunk, total_size, idx, MoveToNextTok)
     print("No of Line Numbers:", n)
@@ -1094,7 +1099,16 @@ function Load53Function(chunk, total_size, ix, pix, funcname, num, level)
     --desc.nups = LoadNo(chunk, total_size, idx, MoveToNextTok)
     desc.nups = 0
     print("No of Upvalues:", nups)
-
+    -- Fixups
+    desc.upvalues = {} -- FIXME : desc.upvalues stores a table that messes with DescribeInst
+    local locvar = {}
+    locvar.varname = "NONE"
+    locvar.pos_varname = 0
+    locvar.startpc = 0
+    locvar.pos_startpc = 0
+    locvar.endpc = 0
+    locvar.pos_endpc = 0
+    desc.locvars[1] = locvar
     return desc
     -- end of Load53Function
 end
@@ -1407,6 +1421,7 @@ function Dechunk(chunk_name, chunk, oconfig)
         print "Found Lua 53 Chunk"
         print "Lua 5.3 is not supported yet"
         result.desc = Load53Function(chunk, result.chunk_size, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, result.desc, 0, 1, oconfig)
     end
 
     return result
