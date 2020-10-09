@@ -1427,3 +1427,72 @@ function Dechunk(chunk_name, chunk, oconfig)
     return result
     -- end of Dechunk
 end
+
+local LuaDechunker   = {}
+local Lua51Dechunker = {}
+local Lua52Dechunker = {}
+local Lua53Dechunker = {}
+LuaDechunker.__index = LuaDechunker
+
+LuaDechunker = {
+    Func_DescFunction          = DescFunction,
+    Func_DechunkHeader         = LuaChunkHeader,
+    Func_DechunkGlobalHeader,
+    Func_LoadFunction          = LoadFunction,
+    Func_LoadUpvalues          = LoadUpvalues,
+    Func_LoadString            = LoadString,
+    Func_LoadByte              = LoadByte,
+    Func_LoadBlock             = LoadBlock,
+    Func_LoadNo                = LoadNo,
+    Func_LoadInt               = LoadInt,
+    Func_LoadSize              = LoadSize,
+    Func_LoadNumber            = LoadNumber,
+    Func_LoadLines             = LoadLines,
+    Func_LoadLocals            = LoadLocals,
+    Func_LoadFuncProto         = LoadFuncProto,
+    Func_LoadCode              = LoadCode,
+    Func_LoadConstantPs        = LoadConstantPs,
+    Func_LoadDebug             = LoadDebug,
+    Func_LoadConstantKs        = LoadConstantKs,
+    Func_CheckSignature        = CheckSignature,
+    Func_CheckVersion          = CheckVersion,
+    Func_CheckFormat           = CheckFormat,
+    Func_CheckEndianness       = CheckEndianness,
+    Func_CheckSizes            = CheckSizes,
+    Func_CheckIntegral         = CheckIntegral,
+    Func_CheckLuaNumber        = CheckLuaNumber,
+    Func_CheckLuaSignature     = CheckLuaSignature
+}
+
+Lua51Dechunker = {
+    Func_DescFunction          = DescFunction,
+    Func_DechunkHeader         = LuaChunkHeader,
+    Func_DechunkGlobalHeader,
+    Func_LoadFunction          = Load51Function,
+    Func_LoadUpvalues          = Load51Upvalues,
+    Func_LoadString            = LoadString,
+    Func_LoadByte              = LoadByte,
+    Func_LoadFuncProto         = LoadFuncProto,
+}
+
+Lua52Dechunker = {
+    Func_DescFunction          = DescFunction,
+    Func_DechunkHeader         = LuaChunkHeader,
+    Func_DechunkGlobalHeader,
+    Func_LoadFunction          = Load52Function,
+    Func_LoadUpvalues          = Load52Upvalues,
+    Func_LoadString            = LoadString,
+    Func_LoadByte              = LoadByte,
+    Func_LoadFuncProto         = LoadFuncProto,
+}
+
+Lua53Dechunker = {
+    Func_DescFunction          = DescFunction,
+    Func_DechunkHeader         = LuaChunkHeader,
+    Func_DechunkGlobalHeader,
+    Func_LoadFunction          = Load52Function,
+    Func_LoadUpvalues          = Load52Upvalues,
+    Func_LoadString            = LoadString,
+    Func_LoadByte              = LoadByte53,
+    Func_LoadFuncProto         = LoadFuncProto,
+}
