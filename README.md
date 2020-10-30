@@ -8,3 +8,6 @@ LuaScope attempts to be lua version agnostic.
 Based on ChunkSpy on Lua 5.1
 Works as ChunkSpy on Lua 5.2
 Works also as ChunkSpy on Lua 5.3
+
+
+Dockerfile and shell scripts are provided for you to run 5.1/5.2/5.3 inside a container.
