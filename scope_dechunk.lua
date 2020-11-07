@@ -1200,8 +1200,9 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(size, name, chunk, result, idx, previdx, stat,
-                        func_movetonext, oconfig)
+function LuaChunkHeader(chunk, result, idx, previdx, stat, oconfig)
+    local size      = result.chunk_size
+    local name      = result.chunk_name
     local chunkdets = {}
 
     local function MoveToNextTok(size)
@@ -1246,13 +1247,12 @@ if chunkdets.version == 83 then
     local cfg_LUAC_DATA = "\25\147\r\n\26\n"
     local len = string.len(cfg_LUAC_DATA)
     --print("Length of LUAC_DATA is ",len)
-    local LUAC_DATA = LoadBlock(len, chunk, size, idx, func_movetonext)
+    local LUAC_DATA = LoadBlock(len, chunk, size, idx, MoveToNextTok)
     --print("Read Luac_data as", LUAC_DATA)
     if LUAC_DATA ~= cfg_LUAC_DATA then
         error("header LUAC_DATA not found, this is not a Lua chunk")
     end
     FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, previdx)
-    MoveIdxLen(6)
 else
 
     --
@@ -1466,9 +1466,7 @@ function Dechunk(chunk_name, chunk, oconfig)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaChunkHeader(descp.chunk_size, descp.chunk_name,
-                                        chunk, descp, idx, previdx,
-                                        stat, MoveToNextTok, oconfig)
+    idx, previdx, dets = LuaChunkHeader(chunk, descp, idx, previdx, stat, oconfig)
 
     if dets.version == 81 then
         --
