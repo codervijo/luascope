@@ -13,7 +13,8 @@ LuaScope attempts to be lua version agnostic.
 Dockerfile and shell scripts are provided for you to run 5.1/5.2/5.3 inside a container.
 
 # Example
-```$ ./lua53dock.sh 
+```
+$ ./lua53dock.sh 
 Found Lua Version	Lua 5.3
 >print "hi"
 hi
