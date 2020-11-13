@@ -18,11 +18,11 @@ This was tested only on Ubuntu, but should work on any Unix-based system.
 
 # Steps to get started
 
-- Make sure b2b directory has git submodule by running
+1. Make sure b2b directory has git submodule by running
   either ```git clone --recurse-submodules https://github.com/codervijo/luascope```
   or     ```git submodule update --init```
-- Make sure docker is installed
-- Run ```./lua53dock.sh``` to run luascope with Lua-5.3
+2. Make sure docker is installed
+3. Run ```./lua53dock.sh``` to run luascope with Lua-5.3
 
 # How to use luascope
 ```
