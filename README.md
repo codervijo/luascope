@@ -12,6 +12,18 @@ LuaScope attempts to be lua version agnostic.
 
 Dockerfile and shell scripts are provided for you to run 5.1/5.2/5.3 inside a container.
 
+# Compatibility
+
+This was tested only on Ubuntu, but should work on any Unix-based system.
+
+# Steps to get started
+
+- Make sure b2b directory has git submodule by running
+  either ```git clone --recurse-submodules https://github.com/codervijo/luascope```
+  or     ```git submodule update --init```
+- Make sure docker is installed
+- Run ```./lua53dock.sh``` to run luascope with Lua-5.3
+
 # How to use luascope
 ```
 $ ./lua53dock.sh 
