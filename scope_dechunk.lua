@@ -874,19 +874,6 @@ function Load52Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
         idx = idx + len
     end
 
-    local function Check52Signature(size, idx, chunk)
-        local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
-
-        len = string.len(lua52signature)
-        IsChunkSizeOk(len, idx, size, "lua52 signature")
-
-        if string.sub(chunk, idx, len) ~= lua52signature then
-            print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
-        end
-
-        return idx+len
-    end
-
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
@@ -900,7 +887,7 @@ function Load52Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
     print("Loading string at "..string.format("%x", idx))
     Hexdump(chunk)
     previdx = idx
-    idx = Check52Signature(total_size, idx, chunk)
+    idx = dechunker.Func_CheckSignature(total_size, idx, chunk)
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
@@ -1117,13 +1104,28 @@ function Load53Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
 end
 
 function CheckSignature(size, idx, chunk, oconfig)
+
     len = string.len(oconfig:GetSign())
     IsChunkSizeOk(len, idx, size, "header signature")
+
     if string.sub(chunk, 1, len) ~= oconfig:GetSign() then
         error("header signature not found, this is not a Lua chunk")
     end
 
     return len
+end
+
+function Check52Signature(size, idx, chunk)
+    local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
+
+    len = string.len(lua52signature)
+    IsChunkSizeOk(len, idx, size, "lua52 signature")
+
+    if string.sub(chunk, idx, len) ~= lua52signature then
+        print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
+    end
+
+    return idx+len
 end
 
 function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
@@ -1425,6 +1427,7 @@ Lua52Dechunker = {
     Func_LoadString            = LoadString,
     Func_LoadByte              = LoadByte,
     Func_LoadFuncProto         = LoadFuncProto,
+    Func_CheckSignature        = Check52Signature,
 }
 
 Lua53Dechunker = {
