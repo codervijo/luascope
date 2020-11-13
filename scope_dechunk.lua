@@ -863,7 +863,7 @@ function Load52Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
     local desc       = {}
     local idx        = ix
     local previdx    = pix
-    local total_size = desc.chunk_size
+    local total_size = descp.chunk_size
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -1200,7 +1200,7 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(chunk, result, idx, previdx, stat, oconfig)
+function LuaChunkHeader(dechunker, chunk, result, idx, previdx, stat, oconfig)
     local size      = result.chunk_size
     local name      = result.chunk_name
     local chunkdets = {}
@@ -1222,14 +1222,14 @@ function LuaChunkHeader(chunk, result, idx, previdx, stat, oconfig)
     --
     -- test signature
     --
-    len = CheckSignature(size, idx, chunk, oconfig)
+    len = dechunker.Func_CheckSignature(size, idx, chunk, oconfig)
     FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
     idx = idx + len
 
     --
     -- test version
     --
-    result.version = CheckVersion(size, idx, chunk,
+    result.version = dechunker.Func_CheckVersion(size, idx, chunk,
                                   MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
     chunkdets.version  = result.version
@@ -1239,30 +1239,30 @@ function LuaChunkHeader(chunk, result, idx, previdx, stat, oconfig)
     -- * Dechunk does not accept anything other than 0. For custom
     -- * binary chunks, modify Dechunk to read it properly.
     --
-    result.format = CheckFormat(size, idx, chunk,
+    result.format = dechunker.Func_CheckFormat(size, idx, chunk,
                                 MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "format (0=official)", previdx)
 
-if chunkdets.version == 83 then
-    local cfg_LUAC_DATA = "\25\147\r\n\26\n"
-    local len = string.len(cfg_LUAC_DATA)
-    --print("Length of LUAC_DATA is ",len)
-    local LUAC_DATA = LoadBlock(len, chunk, size, idx, MoveToNextTok)
-    --print("Read Luac_data as", LUAC_DATA)
-    if LUAC_DATA ~= cfg_LUAC_DATA then
-        error("header LUAC_DATA not found, this is not a Lua chunk")
-    end
-    FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, previdx)
-else
+    if chunkdets.version == 83 then
+        local cfg_LUAC_DATA = "\25\147\r\n\26\n"
+        local len = string.len(cfg_LUAC_DATA)
+        --print("Length of LUAC_DATA is ",len)
+        local LUAC_DATA = LoadBlock(len, chunk, size, idx, MoveToNextTok)
+        --print("Read Luac_data as", LUAC_DATA)
+        if LUAC_DATA ~= cfg_LUAC_DATA then
+            error("header LUAC_DATA not found, this is not a Lua chunk")
+        end
+        FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, previdx)
+    else
 
-    --
-    -- test endianness
-    --
-    endianness = CheckEndianness(size, idx, chunk,
-                                MoveToNextTok, oconfig)
-    FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
-    chunkdets.endianness = endianness
-end
+        --
+        -- test endianness
+        --
+        endianness = CheckEndianness(size, idx, chunk,
+                                    MoveToNextTok, oconfig)
+        FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
+        chunkdets.endianness = endianness
+    end
 
     Hexdump(chunk)
 
@@ -1270,19 +1270,19 @@ end
     -- test sizes
     --
     -- byte sizes
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
                "size_int", "int", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
                "int", "bytes"), previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
                "size_size_t", "size_t", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
                "size_t", "bytes"), previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
                "size_Instruction", "Instruction", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
                "Instruction", "bytes"), previdx)
-    CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
+    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
                "size_lua_Number", "number", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
                "number", "bytes"), previdx)
@@ -1466,7 +1466,7 @@ function Dechunk(chunk_name, chunk, oconfig)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaChunkHeader(chunk, descp, idx, previdx, stat, oconfig)
+    idx, previdx, dets = LuaDechunker:Func_DechunkHeader(chunk, descp, idx, previdx, stat, oconfig)
 
     if dets.version == 81 then
         --
