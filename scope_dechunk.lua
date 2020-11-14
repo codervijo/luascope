@@ -811,7 +811,7 @@ end
 function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
     IsChunkSizeOk(1, idx, size, "version byte")
     ver = LoadByte(chunk, idx, func_movetonext)
-    if ver ~= oconfig:GetVersion() then
+    if oconfig:IsVersionOK(ver) == false then
         error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
         --print(string.format("Dechunk cannot read version %02X chunks", ver))
     end

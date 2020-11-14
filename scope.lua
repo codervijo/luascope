@@ -90,10 +90,8 @@ function main()
             oconfig = Oconfig
             if _VERSION == 'Lua 5.3' then
             	func, msg = load(l, "(interactive mode)")
-            	oconfig:SetVersion("5.3")
             else
             	func, msg = loadstring(l, "(interactive mode)")
-            	--oconfig:SetVersion("5.2")
             end
             func() -- Call the loaded lua string as a function
             if not func then

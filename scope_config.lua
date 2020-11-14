@@ -99,7 +99,7 @@ config.VERBOSE_TEST       = false        -- more verbosity for --test
 --
 -- Detected run time configs
 --
-config.version            = "5.1"
+config.version            = { "5.1", "5.2", "5.3" }
 
 --
 -- primitive platform auto-detection
@@ -239,14 +239,6 @@ function GetLuaNumberType()
     return config.number_type
 end
 
-function GetLuaRuntimeVersion()
-    return config.version
-end
-
-function SetLuaRuntimeVersion(ver)
-    config.version = ver
-end
-
 function SetLuaNumberType(t)
     config.number_type = t
 end
@@ -297,22 +289,28 @@ function ShouldIPrintLowercase()
 end
 
 Oconfig = {
-    SetVersion       =  function (self, v)
-                            SetLuaRuntimeVersion(v)
-                        end,
     GetVersion       =  function (self)
-                            if config.version == "5.1" then
-                                return 0x51
-                            elseif config.version == "5.2" then
-                                return 0x52
-                            elseif config.version == "5.3" then
-                                return 0x53
-                            else
-                                return 0x00
+                            vs = {}
+                            for k,v in pairs(config.version) do
+                                if v == "5.1" then
+                                    vs[#vs+1] = 0x51
+                                elseif v == "5.2" then
+                                    vs[#vs+1] = 0x52
+                                elseif v == "5.3" then
+                                    vs[#vs+1] = 0x53
+                                else
+                                    vs[#vs+1] = 0 
+                                end
                             end
+                            return vs
                         end,
-    GetVersionString =  function (self)
-                            return config.version
+    IsVersionOK      =  function (self, v)
+                            vs = self.GetVersion()
+                            for _,vi in pairs(vs) do
+                                print("Compare ", vi, v)
+                                if vi == v then return true end
+                            end
+                            return false
                         end,
     GetSign          =  function (self)
                             return config.SIGNATURE
