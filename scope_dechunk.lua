@@ -783,6 +783,103 @@ local function LoadDebug(chunk, total_size, idx, previdx, func_movetonext, desc,
     print("Next 4 bytes:", k)
 end
 
+function CheckSignature(size, idx, chunk, oconfig)
+
+    len = string.len(oconfig:GetSign())
+    IsChunkSizeOk(len, idx, size, "header signature")
+
+    if string.sub(chunk, 1, len) ~= oconfig:GetSign() then
+        error("header signature not found, this is not a Lua chunk")
+    end
+
+    return len
+end
+
+function Check52Signature(size, idx, chunk)
+    local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
+
+    len = string.len(lua52signature)
+    IsChunkSizeOk(len, idx, size, "lua52 signature")
+
+    if string.sub(chunk, idx, len) ~= lua52signature then
+        print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
+    end
+
+    return idx+len
+end
+
+function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
+    IsChunkSizeOk(1, idx, size, "version byte")
+    ver = LoadByte(chunk, idx, func_movetonext)
+    if ver ~= oconfig:GetVersion() then
+        error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
+        --print(string.format("Dechunk cannot read version %02X chunks", ver))
+    end
+
+    return ver
+end
+
+function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
+    IsChunkSizeOk(1, idx, size, "format byte")
+    format = LoadByte(chunk, idx, func_movetonext)
+    if format ~= oconfig:GetFormat() then
+        error(string.format("Dechunk cannot read format %02X chunks", format))
+    end
+
+    return format
+end
+
+function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
+    IsChunkSizeOk(1, idx, size, "endianness byte")
+    local endianness = LoadByte(chunk, idx, func_movetonext)
+    if not oconfig:GetConfigDetect() then
+        if endianness ~= oconfig:GetLuaEndianness() then
+            error(string.format("unsupported endianness %s vs %s",
+                  endianness, oconfig:GetLuaEndianness()))
+        end
+    else
+        SetLuaEndianness(endianness)
+    end
+    return endianness
+end
+
+function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, oconfig)
+    IsChunkSizeOk(4, idx, size, "size bytes")
+    local byte = LoadByte(chunk, idx, func_movetonext)
+    lt = oconfig:GetLuavmSizeTbl(sizename)["get"]
+    if not oconfig:GetConfigDetect() then
+        if byte ~= lt() then
+            error(string.format("mismatch in %s size (needs %d but read %d)",
+                  sizename, lt(), byte))
+        end
+    else
+        lt.set(byte)
+    end
+end
+
+function CheckIntegral(size, idx, chunk, func_movetonext)
+    IsChunkSizeOk(1, idx, size, "integral byte")
+    SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
+end
+
+function CheckLuaNumber(oconfig)
+    local num_id = oconfig:GetLuaNumberSize() .. oconfig:GetLuaIntegral()
+    if not oconfig:GetConfigDetect() then
+        if oconfig:GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
+            error("incorrect lua_Number format or bad test number")
+        end
+    else
+        -- look for a number type match in our table
+        SetLuaNumberType(nil)
+        for i, v in pairs(LUANUMBER_ID) do
+            if num_id == i then SetLuaNumberType(v) end
+        end
+        if not oconfig:GetLuaNumberType() then
+            error("unrecognized lua_Number type")
+        end
+    end
+end
+
 --
 -- this is recursively called to load the chunk or function body
 --
@@ -790,7 +887,7 @@ function Load51Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
     local desc       = {}
     local idx        = ix
     local previdx    = pix
-    local total_size = desc.size
+    local total_size = descp.chunk_size
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -1103,103 +1200,6 @@ function Load53Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
     -- end of Load53Function
 end
 
-function CheckSignature(size, idx, chunk, oconfig)
-
-    len = string.len(oconfig:GetSign())
-    IsChunkSizeOk(len, idx, size, "header signature")
-
-    if string.sub(chunk, 1, len) ~= oconfig:GetSign() then
-        error("header signature not found, this is not a Lua chunk")
-    end
-
-    return len
-end
-
-function Check52Signature(size, idx, chunk)
-    local lua52signature = "\x19\x93\x0d\x0a\x1a\x0a"
-
-    len = string.len(lua52signature)
-    IsChunkSizeOk(len, idx, size, "lua52 signature")
-
-    if string.sub(chunk, idx, len) ~= lua52signature then
-        print("Lua 5.2 signature not found, this is not a Lua5.2 chunk")
-    end
-
-    return idx+len
-end
-
-function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
-    IsChunkSizeOk(1, idx, size, "version byte")
-    ver = LoadByte(chunk, idx, func_movetonext)
-    if ver ~= oconfig:GetVersion() then
-        error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
-        --print(string.format("Dechunk cannot read version %02X chunks", ver))
-    end
-
-    return ver
-end
-
-function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
-    IsChunkSizeOk(1, idx, size, "format byte")
-    format = LoadByte(chunk, idx, func_movetonext)
-    if format ~= oconfig:GetFormat() then
-        error(string.format("Dechunk cannot read format %02X chunks", format))
-    end
-
-    return format
-end
-
-function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
-    IsChunkSizeOk(1, idx, size, "endianness byte")
-    local endianness = LoadByte(chunk, idx, func_movetonext)
-    if not oconfig:GetConfigDetect() then
-        if endianness ~= oconfig:GetLuaEndianness() then
-            error(string.format("unsupported endianness %s vs %s",
-                  endianness, oconfig:GetLuaEndianness()))
-        end
-    else
-        SetLuaEndianness(endianness)
-    end
-    return endianness
-end
-
-function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, oconfig)
-    IsChunkSizeOk(4, idx, size, "size bytes")
-    local byte = LoadByte(chunk, idx, func_movetonext)
-    lt = oconfig:GetLuavmSizeTbl(sizename)["get"]
-    if not oconfig:GetConfigDetect() then
-        if byte ~= lt() then
-            error(string.format("mismatch in %s size (needs %d but read %d)",
-                  sizename, lt(), byte))
-        end
-    else
-        lt.set(byte)
-    end
-end
-
-function CheckIntegral(size, idx, chunk, func_movetonext)
-    IsChunkSizeOk(1, idx, size, "integral byte")
-    SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
-end
-
-function CheckLuaNumber(oconfig)
-    local num_id = oconfig:GetLuaNumberSize() .. oconfig:GetLuaIntegral()
-    if not oconfig:GetConfigDetect() then
-        if oconfig:GetLuaNumberType() ~= LUANUMBER_ID[num_id] then
-            error("incorrect lua_Number format or bad test number")
-        end
-    else
-        -- look for a number type match in our table
-        SetLuaNumberType(nil)
-        for i, v in pairs(LUANUMBER_ID) do
-            if num_id == i then SetLuaNumberType(v) end
-        end
-        if not oconfig:GetLuaNumberType() then
-            error("unrecognized lua_Number type")
-        end
-    end
-end
-
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
 function LuaChunkHeader(dechunker, chunk, result, idx, previdx, stat, oconfig)
@@ -1480,7 +1480,7 @@ function Dechunk(chunk_name, chunk, oconfig)
         descp.desc = Lua51Dechunker:Func_LoadFunction(chunk, descp, idx, previdx, "(chunk)", 0, 1)
         DescFunction(chunk, descp.desc, 0, 1, oconfig)
         stat.total = idx - 1
-        DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes", oconfig)
+        -- TODO DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes", oconfig)
         descp.stat = stat
         FormatLine(chunk, 0, "** end of chunk **", idx)
     elseif dets.version == 82 then
