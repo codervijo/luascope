@@ -883,11 +883,11 @@ end
 --
 -- this is recursively called to load the chunk or function body
 --
-function Load51Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
+function Load51Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
     local desc       = {}
     local idx        = ix
     local previdx    = pix
-    local total_size = descp.chunk_size
+    local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -956,11 +956,11 @@ function Load51Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
 end
 
 -- References : lundump.[ch], http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
-function Load52Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
+function Load52Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
     local desc       = {}
     local idx        = ix
     local previdx    = pix
-    local total_size = descp.chunk_size
+    local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -1067,11 +1067,11 @@ end
 -- References : https://github.com/viruscamp/luadec/blob/master/ChunkSpy/ChunkSpy53.lua
 --              https://the-ravi-programming-language.readthedocs.io/en/latest/lua_bytecode_reference.html
 --              https://raw.githubusercontent.com/viruscamp/luadec/master/ChunkSpy/ChunkSpy53.lua
-function Load53Function(dechunker, chunk, descp, ix, pix, funcname, num, level)
+function Load53Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
     local desc       = {}
     local idx        = ix
     local previdx    = pix
-    local total_size = descp.chunk_size
+    local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
         previdx = idx
