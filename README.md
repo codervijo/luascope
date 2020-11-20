@@ -36,4 +36,6 @@ Pos   Hex Data   Description or Code
                          ** global header start **
 0000  1B4C7561           header signature: "\27Lua"
 0004  53                 version (major:minor hex digits)
-0005  00                 format (0=official)```
+0005  00                 format (0=official)
+...
+....
