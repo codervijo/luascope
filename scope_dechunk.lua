@@ -1202,10 +1202,11 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(dechunker, chunk, result, idx, previdx, stat, oconfig)
-    local size      = result.chunk_size
-    local name      = result.chunk_name
+function LuaChunkHeader(dechunker, chunk, chunkinfo, idx, previdx, oconfig)
+    local size      = chunkinfo.chunk_size
+    local name      = chunkinfo.chunk_name
     local chunkdets = {}
+    local stat      = chunkinfo.stats
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -1231,17 +1232,17 @@ function LuaChunkHeader(dechunker, chunk, result, idx, previdx, stat, oconfig)
     --
     -- test version
     --
-    result.version = dechunker.Func_CheckVersion(size, idx, chunk,
+    chunkinfo.version = dechunker.Func_CheckVersion(size, idx, chunk,
                                   MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
-    chunkdets.version  = result.version
+    chunkdets.version  = chunkinfo.version
 
     --
     -- test format (5.1)
     -- * Dechunk does not accept anything other than 0. For custom
     -- * binary chunks, modify Dechunk to read it properly.
     --
-    result.format = dechunker.Func_CheckFormat(size, idx, chunk,
+    chunkinfo.format = dechunker.Func_CheckFormat(size, idx, chunk,
                                 MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "format (0=official)", previdx)
 
@@ -1453,10 +1454,10 @@ function Dechunk(chunk_name, chunk, oconfig)
     ---------------------------------------------------------------
     local idx = 1
     local previdx, len
-    local descp = {}     -- table with all parsed data, descriptor for chunk
-    local stat = {}
-    descp.chunk_name = chunk_name or ""
-    descp.chunk_size = string.len(chunk)
+    local chunkinfo = {}     -- table with all parsed data, descriptor for chunk
+    chunkinfo.chunk_name = chunk_name or ""
+    chunkinfo.chunk_size = string.len(chunk)
+    chunkinfo.stats      = {}
 
     setmetatable(Lua51Dechunker, LuaDechunker)
     setmetatable(Lua52Dechunker, LuaDechunker)
@@ -1469,7 +1470,7 @@ function Dechunk(chunk_name, chunk, oconfig)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaDechunker:Func_DechunkHeader(chunk, descp, idx, previdx, stat, oconfig)
+    idx, previdx, dets = LuaDechunker:Func_DechunkHeader(chunk, chunkinfo, idx, previdx, oconfig)
 
     if dets.version == 81 then
         --
@@ -1477,29 +1478,28 @@ function Dechunk(chunk_name, chunk, oconfig)
         --
         -- actual call to start the function loading process
         --
-        descp.desc = Lua51Dechunker:Func_LoadFunction(chunk, descp, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, descp.desc, 0, 1, oconfig)
-        stat.total = idx - 1
+        chunkinfo.desc = Lua51Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
+        chunkinfo.stats.total = idx - 1
         -- TODO DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes", oconfig)
-        descp.stat = stat
         FormatLine(chunk, 0, "** end of chunk **", idx)
     elseif dets.version == 82 then
         --
         --  Lua Version 5.2
         --
         print "Found Lua 52 chucnk"
-        descp.desc = Lua52Dechunker:Func_LoadFunction(chunk, descp, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, descp.desc, 0, 1, oconfig)
+        chunkinfo.desc = Lua52Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
     elseif dets.version == 83 then
         --
         -- Lua Version 5.3
         --
         print "Found Lua 53 Chunk"
         print "Lua 5.3 is not supported yet"
-        descp.desc = Lua53Dechunker:Func_LoadFunction(chunk, descp, idx, previdx, "(chunk)", 0, 1)
-        DescFunction(chunk, descp.desc, 0, 1, oconfig)
+        chunkinfo.desc = Lua53Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
     end
 
-    return descp
+    return chunkinfo
     -- end of Dechunk
 end
