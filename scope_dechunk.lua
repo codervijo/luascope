@@ -883,10 +883,10 @@ end
 --
 -- this is recursively called to load the chunk or function body
 --
-function Load51Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
+function Load51Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local desc       = {}
-    local idx        = ix
-    local previdx    = pix
+    local idx        = chunkinfo.idx
+    local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
@@ -951,15 +951,19 @@ function Load51Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, lev
     LoadLocals(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)     SetStat("locals")
     LoadUpvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
 
+    -- XXX this should get redundant once chunkinfo is propogated everywhere
+    chunkinfo.idx = idx
+    chunkinfo.previdx = previdx
+
     return desc
     -- end of Load51Function
 end
 
 -- References : lundump.[ch], http://files.catwell.info/misc/mirror/lua-5.2-bytecode-vm-dirk-laurie/lua52vm.html
-function Load52Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
+function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local desc       = {}
-    local idx        = ix
-    local previdx    = pix
+    local idx        = chunkinfo.idx
+    local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
@@ -1067,10 +1071,10 @@ end
 -- References : https://github.com/viruscamp/luadec/blob/master/ChunkSpy/ChunkSpy53.lua
 --              https://the-ravi-programming-language.readthedocs.io/en/latest/lua_bytecode_reference.html
 --              https://raw.githubusercontent.com/viruscamp/luadec/master/ChunkSpy/ChunkSpy53.lua
-function Load53Function(dechunker, chunk, chunkinfo, ix, pix, funcname, num, level)
+function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local desc       = {}
-    local idx        = ix
-    local previdx    = pix
+    local idx        = chunkinfo.idx
+    local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
 
     local function MoveToNextTok(size)
@@ -1202,11 +1206,13 @@ end
 
 -- Lua 5.1 and 5.2 Header structures are identical
 -- From lua source file lundump.c
-function LuaChunkHeader(dechunker, chunk, chunkinfo, idx, previdx, oconfig)
+function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     local size      = chunkinfo.chunk_size
     local name      = chunkinfo.chunk_name
     local chunkdets = {}
     local stat      = chunkinfo.stats
+    local idx       = chunkinfo.idx
+    local previdx   = chunkinfo.previdx
 
     local function MoveToNextTok(size)
         previdx = idx
@@ -1449,15 +1455,12 @@ Lua53Dechunker = {
 --   user trace the extent of functions in the listing
 --
 function Dechunk(chunk_name, chunk, oconfig)
-    ---------------------------------------------------------------
-    -- variables
-    ---------------------------------------------------------------
-    local idx = 1
-    local previdx, len
     local chunkinfo = {}     -- table with all parsed data, descriptor for chunk
     chunkinfo.chunk_name = chunk_name or ""
     chunkinfo.chunk_size = string.len(chunk)
     chunkinfo.stats      = {}
+    chunkinfo.idx        = 1
+    chunkinfo.previdx    = 0
 
     setmetatable(Lua51Dechunker, LuaDechunker)
     setmetatable(Lua52Dechunker, LuaDechunker)
@@ -1470,7 +1473,7 @@ function Dechunk(chunk_name, chunk, oconfig)
     -- * this is meant to make output customization easy
     --]]
 
-    idx, previdx, dets = LuaDechunker:Func_DechunkHeader(chunk, chunkinfo, idx, previdx, oconfig)
+    chunkinfo.idx, chunkinfo.previdx, dets = LuaDechunker:Func_DechunkHeader(chunk, chunkinfo, oconfig)
 
     if dets.version == 81 then
         --
@@ -1478,17 +1481,17 @@ function Dechunk(chunk_name, chunk, oconfig)
         --
         -- actual call to start the function loading process
         --
-        chunkinfo.desc = Lua51Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        chunkinfo.desc = Lua51Dechunker:Func_LoadFunction(chunk, chunkinfo, "(chunk)", 0, 1)
         DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
-        chunkinfo.stats.total = idx - 1
+        chunkinfo.stats.total = chunkinfo.idx - 1
         -- TODO DisplayStat(chunk, "* TOTAL size = "..stat.total.." bytes", oconfig)
-        FormatLine(chunk, 0, "** end of chunk **", idx)
+        FormatLine(chunk, 0, "** end of chunk **", chunkinfo.idx)
     elseif dets.version == 82 then
         --
         --  Lua Version 5.2
         --
         print "Found Lua 52 chucnk"
-        chunkinfo.desc = Lua52Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        chunkinfo.desc = Lua52Dechunker:Func_LoadFunction(chunk, chunkinfo, "(chunk)", 0, 1)
         DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
     elseif dets.version == 83 then
         --
@@ -1496,7 +1499,7 @@ function Dechunk(chunk_name, chunk, oconfig)
         --
         print "Found Lua 53 Chunk"
         print "Lua 5.3 is not supported yet"
-        chunkinfo.desc = Lua53Dechunker:Func_LoadFunction(chunk, chunkinfo, idx, previdx, "(chunk)", 0, 1)
+        chunkinfo.desc = Lua53Dechunker:Func_LoadFunction(chunk, chunkinfo, "(chunk)", 0, 1)
         DescFunction(chunk, chunkinfo.desc, 0, 1, oconfig)
     end
 
