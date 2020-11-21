@@ -783,9 +783,11 @@ local function LoadDebug(chunk, total_size, idx, previdx, func_movetonext, desc,
     print("Next 4 bytes:", k)
 end
 
-function CheckSignature(size, idx, chunk, oconfig)
+function CheckSignature(chunk, chunkinfo, oconfig)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+    local len  = string.len(oconfig:GetSign())
 
-    len = string.len(oconfig:GetSign())
     IsChunkSizeOk(len, idx, size, "header signature")
 
     if string.sub(chunk, 1, len) ~= oconfig:GetSign() then
@@ -1231,7 +1233,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     --
     -- test signature
     --
-    len = dechunker.Func_CheckSignature(size, idx, chunk, oconfig)
+    len = dechunker.Func_CheckSignature(chunk, chunkinfo, oconfig)
     FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
     idx = idx + len
 
