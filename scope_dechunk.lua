@@ -794,6 +794,8 @@ function CheckSignature(chunk, chunkinfo, oconfig)
         error("header signature not found, this is not a Lua chunk")
     end
 
+    chunkinfo.idx = chunkinfo.idx + len
+
     return len
 end
 
@@ -810,9 +812,13 @@ function Check52Signature(size, idx, chunk)
     return idx+len
 end
 
-function CheckVersion(size, idx, chunk, func_movetonext, oconfig)
+function CheckVersion(chunk, chunkinfo, func_movetonext, oconfig)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+
     IsChunkSizeOk(1, idx, size, "version byte")
     ver = LoadByte(chunk, idx, func_movetonext)
+
     if oconfig:IsVersionOK(ver) == false then
         error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
         --print(string.format("Dechunk cannot read version %02X chunks", ver))
@@ -1235,13 +1241,13 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     --
     len = dechunker.Func_CheckSignature(chunk, chunkinfo, oconfig)
     FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
-    idx = idx + len
+    idx = chunkinfo.idx
 
     --
     -- test version
     --
-    chunkinfo.version = dechunker.Func_CheckVersion(size, idx, chunk,
-                                  MoveToNextTok, oconfig)
+    chunkinfo.version = dechunker.Func_CheckVersion(chunk, chunkinfo,
+                                                    MoveToNextTok, oconfig)
     FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
     chunkdets.version  = chunkinfo.version
 

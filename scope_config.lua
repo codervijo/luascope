@@ -307,7 +307,7 @@ Oconfig = {
     IsVersionOK      =  function (self, v)
                             vs = self.GetVersion()
                             for _,vi in pairs(vs) do
-                                print("Compare ", vi, v)
+                                --print("Compare ", vi, v)
                                 if vi == v then return true end
                             end
                             return false
