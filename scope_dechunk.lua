@@ -361,14 +361,14 @@ end
 --
 -- loads a single byte and returns it as a number
 --
-local function LoadByte(chunk, previdx, func_movetonext)
-    func_movetonext(1)
-    return string.byte(chunk, previdx)
+local function LoadByte(chunk, chunkinfo)
+    chunkinfo.previdx = chunkinfo.idx
+    chunkinfo.idx =  chunkinfo.idx + 1
+    return string.byte(chunk, chunkinfo.previdx)
 end
 
-local function LoadByte53(chunk, idx, func_moveidx)
-    func_moveidx(1)
-    return string.byte(chunk, idx)
+local function LoadByte53(chunk, chunkinfo)
+    return string.byte(chunk, chunkinfo.idx)
 end
 
 --
@@ -506,32 +506,38 @@ local function SizeLoadString(chunk, total_size, idx)
     end
 end
 
-local function LoadLua53String(chunk, total_size, idx, func_movetonext, func_moveidx)
-      print("idx: "..string.format("%x", idx))
-      local len = LoadByte53(chunk, idx+1, func_moveidx)
-      local islngstr = nil
-      if not len then
+local function LoadLua53String(chunk, chunkinfo)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+
+    print("idx: "..string.format("%x", idx))
+    local len = LoadByte53(chunk, chunkinfo)
+    local islngstr = nil
+    if not len then
         error("could not load String")
         return
-      end
-      print("Lua53string of len "..len.." at idx "..string.format("%x", idx)) 
-      if len == 255 then
-        len = LoadSize(chunk, total_size, idx, func_movetonext)
+    end
+    chunkinfo.idx =  chunkinfo.idx + 1
+    print("Lua53string of len "..len.." at idx "..string.format("%x", idx)) 
+    if len == 255 then
+        len = LoadSize(chunk, size, idx, {})
         islngstr = true
-      end
-      if len == 0 then        -- there is no error, return a nil
+    end
+
+    if len == 0 then        -- there is no error, return a nil
         return nil, len, islngstr
-      end
-      if len == 1 then
+    end
+    if len == 1 then
         return "", len, islngstr
-      end
-      --TestChunk(len - 1, idx, "LoadString")
-      IsChunkSizeOk(len, idx+1, total_size, "LoadString")
-      local s = string.sub(chunk, idx+1, idx + len)
-      --idx = idx + len - 1
-      func_moveidx(len)
-      print("Loaded string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
-      return s, len, islngstr
+    end
+    --TestChunk(len - 1, idx, "LoadString")
+    IsChunkSizeOk(len, idx+1, size, "LoadString")
+    local s = string.sub(chunk, idx+1, idx + len)
+    --idx = idx + len - 1
+    --func_moveidx(len)
+    chunkinfo.idx = chunkinfo.idx + len
+    print("Loaded string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
+    return s, len, islngstr
 end
 
 --
@@ -612,8 +618,12 @@ end
 --
 -- load upvalues information
 --
-local function Load53Upvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
-    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+local function Load53Upvalues(chunk, chunkinfo, desc, func_moveidx)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, size, idx, func_movetonext)
+
     print("No of Upvalues", n)
     desc.pos_upvalues = previdx
     desc.upvalues = {}
@@ -621,10 +631,10 @@ local function Load53Upvalues(chunk, total_size, idx, previdx, func_movetonext, 
     desc.posupvalues = {}
     for i = 1, n do
         local upvalue = {}
-        upvalue.instack = LoadByte(chunk, ix, func_movetonext)
-        upvalue.pos_instack = previdx
-        upvalue.idx = LoadByte(chunk, ix, func_movetonext)
-        upvalue.pos_idx = previdx
+        upvalue.instack = LoadByte(chunk, chunkinfo)
+        upvalue.pos_instack = chunkinfo.previdx
+        upvalue.idx = LoadByte(chunk, chunkinfo)
+        upvalue.pos_idx = chunkinfo.previdx
         desc.upvalues[i] = upvalue
     end
     print("Read n bytes for upvalue", y)
@@ -657,7 +667,7 @@ end
 --
 local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, desc)
     local size = LoadInt(chunk, total_size, idx, func_movetonext)
-    print("Loading instructions of Size "..size.." at idx "..string.format("%x", idx))
+    print("Loading instructions of Size "..size.."hex:" ..string.format("%x", size).." at idx "..string.format("%x", idx))
     desc.pos_code = previdx
     desc.code = {}
     desc.sizecode = size
@@ -669,8 +679,12 @@ end
 --
 -- load constants information (data)
 --
-local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
-    local n = LoadInt(chunk, total_size, idx, func_movetonext)
+local function LoadConstantKs(chunk, chunkinfo, func_movetonext, func_moveidx, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, total_size, idx, func_movetonext)
+
     desc.pos_ks = previdx
     desc.k = {}
     desc.sizek = n
@@ -679,7 +693,7 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
     ix = idx + GetLuaIntSize()  + 0
     print("Loading "..n.." constants")
     for i = 1, n do
-        local t = LoadByte(chunk, ix, func_movetonext)
+        local t = LoadByte(chunk, chunkinfo)
         pidx = pidx + 1
         ix = ix + 1
         desc.posk[i] = pidx
@@ -688,7 +702,7 @@ local function LoadConstantKs(chunk, total_size, idx, previdx, func_movetonext, 
             desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
             print("Got boolean")
-            local b = LoadByte(chunk, ix, func_movetonext)
+            local b = LoadByte(chunk, chunkinfo)
             if b == 0 then b = false else b = true end
             desc.k[i] = b
         elseif t == GetTypeString() then
@@ -709,7 +723,7 @@ end
 --
 -- load constants information (data)
 --
-local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
+local function LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
     local n = LoadInt(chunk, total_size, idx, func_movetonext)
     desc.pos_ks = previdx
     desc.k = {}
@@ -719,7 +733,11 @@ local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetone
     ix = idx + GetLuaIntSize()  + 0
     print("Loading "..n.." constants")
     for i = 1, n do
-        local t = LoadByte(chunk, ix, func_movetonext)
+        chunkinfo.idx = idx
+        chunkinfo.previdx = previdx
+        local t = LoadByte(chunk, chunkinfo)
+        idx = chunkinfo.idx
+        previdx = chunkinfo.previdx
         pidx = pidx + 1
         ix = ix + 1
         desc.posk[i] = pidx
@@ -728,14 +746,22 @@ local function LoadConstantsLua53(chunk, total_size, idx, previdx, func_movetone
             desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
             print("Got boolean")
-            local b = LoadByte(chunk, ix, func_movetonext)
+            chunkinfo.idx = idx
+            chunkinfo.previdx = previdx
+            local b = LoadByte(chunk, chunkinfo)
+            idx = chunkinfo.idx
+            previdx = chunkinfo.previdx
             if b == 0 then b = false else b = true end
             desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string at "..string.format("%x", idx))
             ix = ix - 1  -- FIXME 5.3
             pidx = pidx - 1  -- FIXME 5.3
-            desc.k[i], strsize = LoadLua53String(chunk, total_size, ix, func_movetonext, func_moveidx)
+            chunkinfo.idx = idx
+            chunkinfo.previdx = previdx
+            desc.k[i], strsize = LoadLua53String(chunk, chunkinfo)
+            idx = chunkinfo.idx
+            previdx = chunkinfo.previdx
             ix = ix + strsize + 1
             pidx = pidx + strsize + 1
         elseif t == GetTypeNIL() then
@@ -812,12 +838,12 @@ function Check52Signature(size, idx, chunk)
     return idx+len
 end
 
-function CheckVersion(chunk, chunkinfo, func_movetonext, oconfig)
+function CheckVersion(chunk, chunkinfo, oconfig)
     local size = chunkinfo.chunk_size
     local idx  = chunkinfo.idx
 
     IsChunkSizeOk(1, idx, size, "version byte")
-    ver = LoadByte(chunk, idx, func_movetonext)
+    ver = LoadByte(chunk, chunkinfo)
 
     if oconfig:IsVersionOK(ver) == false then
         error(string.format("Dechunk(%s) cannot read version %02X chunks", oconfig:GetVersion(), ver))
@@ -827,9 +853,12 @@ function CheckVersion(chunk, chunkinfo, func_movetonext, oconfig)
     return ver
 end
 
-function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
+function CheckFormat(chunk, chunkinfo, oconfig)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+
     IsChunkSizeOk(1, idx, size, "format byte")
-    format = LoadByte(chunk, idx, func_movetonext)
+    format = LoadByte(chunk, chunkinfo)
     if format ~= oconfig:GetFormat() then
         error(string.format("Dechunk cannot read format %02X chunks", format))
     end
@@ -837,9 +866,12 @@ function CheckFormat(size, idx, chunk, func_movetonext, oconfig)
     return format
 end
 
-function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
+function CheckEndianness(chunk, chunkinfo, oconfig)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+
     IsChunkSizeOk(1, idx, size, "endianness byte")
-    local endianness = LoadByte(chunk, idx, func_movetonext)
+    local endianness = LoadByte(chunk, chunkinfo)
     if not oconfig:GetConfigDetect() then
         if endianness ~= oconfig:GetLuaEndianness() then
             error(string.format("unsupported endianness %s vs %s",
@@ -851,9 +883,13 @@ function CheckEndianness(size, idx, chunk, func_movetonext, oconfig)
     return endianness
 end
 
-function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename, oconfig)
+function CheckSizes(chunk, chunkinfo, sizename, oconfig)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+
     IsChunkSizeOk(4, idx, size, "size bytes")
-    local byte = LoadByte(chunk, idx, func_movetonext)
+    local byte = LoadByte(chunk, chunkinfo)
     lt = oconfig:GetLuavmSizeTbl(sizename)["get"]
     if not oconfig:GetConfigDetect() then
         if byte ~= lt() then
@@ -865,9 +901,12 @@ function CheckSizes(size, idx, previdx, chunk, func_movetonext, mysize, sizename
     end
 end
 
-function CheckIntegral(size, idx, chunk, func_movetonext)
+function CheckIntegral(chunk, chunkinfo)
+    local size = chunkinfo.chunk_size
+    local idx  = chunkinfo.idx
+
     IsChunkSizeOk(1, idx, size, "integral byte")
-    SetLuaIntegral(LoadByte(chunk, idx, func_movetonext))
+    SetLuaIntegral(LoadByte(chunk, chunkinfo))
 end
 
 function CheckLuaNumber(oconfig)
@@ -936,10 +975,10 @@ function Load51Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -- some byte counts
     -------------------------------------------------------------
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
-    desc.nups = LoadByte(chunk, idx, MoveToNextTok)
-    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    desc.nups = LoadByte(chunk, chunkinfo)
+    desc.numparams = LoadByte(chunk, chunkinfo)
+    desc.is_vararg = LoadByte(chunk, chunkinfo)
+    desc.maxstacksize = LoadByte(chunk, chunkinfo)
     SetStat("header")
     print("Num params"..desc.numparams)
     print("Max stack size"..desc.maxstacksize)
@@ -1010,9 +1049,9 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -- some byte counts
     --------------------desc-----------------------------------------
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
-    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    desc.numparams = LoadByte(chunk, chunkinfo)
+    desc.is_vararg = LoadByte(chunk, chunkinfo)
+    desc.maxstacksize = LoadByte(chunk, chunkinfo)
     SetStat("header")
     print("Num params :"..desc.numparams)
     print("Max stack size :"..desc.maxstacksize)
@@ -1111,9 +1150,9 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
     -- statistics handler
-    local start = idx
-    desc.stat = {}
-    desc.stat.funcs = 0
+    local start       = idx
+    desc.stat         = {}
+    desc.stat.funcs   = 0
     desc.stat.locvars = {}
     local function SetStat(item)
         desc.stat[item] = idx - start
@@ -1121,18 +1160,28 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     end
     print("Loading string at "..string.format("%x", idx).." 0x"..string.format("%x", idx))
     Hexdump(chunk)
-    previdx = idx
+
     --idx = CheckLuaSignature(total_size, idx, chunk)
     local str = {}
+    idx  = idx + 6 -- FIXME
+    chunkinfo.idx = chunkinfo.idx + 6 -- TODO
+    chunkinfo.previdx = chunkinfo.previdx + 6
+    chunkinfo.previdx = idx
+    previdx = idx
     --desc.source 
     print("idx: "..string.format("%x", idx).." previdx: "..previdx)
-    str.val, str.len, str.islong= LoadLua53String(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+    str.val, str.len, str.islong= LoadLua53String(chunk, chunkinfo)
     print("Source code: ", str.val, str.len)
+    idx = chunkinfo.idx
+    previdx = chunkinfo.previdx
     desc.pos_source = previdx
     print("idx: "..string.format("%x", idx).." previdx: "..previdx)
 
     -- line where the function was defined
+    idx = chunkinfo.idx
     desc.linedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
+    chunkinfo.idx = idx
+    chunkinfo.previdx = previdx
     print("Pos :".. desc.linedefined.." 0x"..string.format("%x", desc.linedefined))
     desc.pos_linedefined = previdx
     desc.lastlinedefined = LoadInt(chunk, total_size, idx, MoveToNextTok)
@@ -1141,26 +1190,36 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
 
     -------------------------------------------------------------
     -- some byte counts
-    --------------------desc-----------------------------------------
+    -------------------------------------------------------------
+    chunkinfo.idx = idx
+    chunkinfo.previdx = previdx
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
-    desc.numparams = LoadByte(chunk, idx, MoveToNextTok)
-    desc.is_vararg = LoadByte(chunk, idx, MoveToNextTok)
-    desc.maxstacksize = LoadByte(chunk, idx, MoveToNextTok)
+    desc.numparams = LoadByte(chunk, chunkinfo)
+    desc.is_vararg = LoadByte(chunk, chunkinfo)
+    desc.maxstacksize = LoadByte(chunk, chunkinfo)
     SetStat("header")
+    idx = chunkinfo.idx - 1 -- FIXME
     print("Num params :"..desc.numparams)
     print("Max stack size :"..desc.maxstacksize.." idx "..string.format("%x", idx))
     print "3"
 
     -- load parts of a chunk
+    previdx = chunkinfo.previdx - 1 --FIXME
     LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc)                   SetStat("code")
+    chunkinfo.idx = idx
+    chunkinfo.previdx = previdx
     print "3.4"
     print("idx "..string.format("%x", idx))
     Hexdump(string.sub(chunk, idx, idx+32))
 
-    nc  = LoadConstantsLua53(chunk, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    nc  = LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
     idx = idx + nc -- FIXME 
     previdx = previdx + nc -- FIXME
-    Load53Upvalues(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen)   SetStat("upvalues")
+    chunkinfo.idx = idx
+    chunkinfo.previdx = previdx
+    Load53Upvalues(chunk, chunkinfo, desc, MoveIdxLen)   SetStat("upvalues")
+    idx = chunkinfo.idx
+    previdx = chunkinfo.previdx
     LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen) SetStat("proto")
     SetStat("funcs")
 
@@ -1246,9 +1305,8 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     --
     -- test version
     --
-    chunkinfo.version = dechunker.Func_CheckVersion(chunk, chunkinfo,
-                                                    MoveToNextTok, oconfig)
-    FormatLine(chunk, 1, "version (major:minor hex digits)", previdx)
+    chunkinfo.version = dechunker.Func_CheckVersion(chunk, chunkinfo, oconfig)
+    FormatLine(chunk, 1, "version (major:minor hex digits)", chunkinfo.previdx)
     chunkdets.version  = chunkinfo.version
 
     --
@@ -1256,28 +1314,28 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     -- * Dechunk does not accept anything other than 0. For custom
     -- * binary chunks, modify Dechunk to read it properly.
     --
-    chunkinfo.format = dechunker.Func_CheckFormat(size, idx, chunk,
-                                MoveToNextTok, oconfig)
-    FormatLine(chunk, 1, "format (0=official)", previdx)
+    chunkinfo.format = dechunker.Func_CheckFormat(chunk, chunkinfo, oconfig)
+    FormatLine(chunk, 1, "format (0=official)", chunkinfo.previdx)
 
     if chunkdets.version == 83 then
         local cfg_LUAC_DATA = "\25\147\r\n\26\n"
         local len = string.len(cfg_LUAC_DATA)
-        --print("Length of LUAC_DATA is ",len)
-        local LUAC_DATA = LoadBlock(len, chunk, size, idx, MoveToNextTok)
+        print("Length of LUAC_DATA is ",len)
+        idx = chunkinfo.idx
+        local LUAC_DATA = LoadBlock(len, chunk, size, chunkinfo.idx, MoveToNextTok)
+        chunkinfo.idx   = idx
         --print("Read Luac_data as", LUAC_DATA)
         if LUAC_DATA ~= cfg_LUAC_DATA then
             error("header LUAC_DATA not found, this is not a Lua chunk")
         end
-        FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, previdx)
+        FormatLine(chunk, len, "LUAC_DATA: "..cfg_LUAC_DATA, chunkinfo.previdx)
     else
 
         --
         -- test endianness
         --
-        endianness = CheckEndianness(size, idx, chunk,
-                                    MoveToNextTok, oconfig)
-        FormatLine(chunk, 1, "endianness (1=little endian)", previdx)
+        endianness = CheckEndianness(chunk, chunkinfo, oconfig)
+        FormatLine(chunk, 1, "endianness (1=little endian)", chunkinfo.previdx)
         chunkdets.endianness = endianness
     end
 
@@ -1287,22 +1345,18 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     -- test sizes
     --
     -- byte sizes
-    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
-               "size_int", "int", oconfig)
+    dechunker.Func_CheckSizes(chunk, chunkinfo, "int", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
-               "int", "bytes"), previdx)
-    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
-               "size_size_t", "size_t", oconfig)
+               "int", "bytes"), chunkinfo.previdx)
+    dechunker.Func_CheckSizes(chunk, chunkinfo, "size_t", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
-               "size_t", "bytes"), previdx)
-    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
-               "size_Instruction", "Instruction", oconfig)
+               "size_t", "bytes"), chunkinfo.previdx)
+    dechunker.Func_CheckSizes(chunk, chunkinfo, "Instruction", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
-               "Instruction", "bytes"), previdx)
-    dechunker.Func_CheckSizes(size, idx, previdx, chunk, MoveToNextTok,
-               "size_lua_Number", "number", oconfig)
+               "Instruction", "bytes"), chunkinfo.previdx)
+    dechunker.Func_CheckSizes(chunk, chunkinfo, "number", oconfig)
     FormatLine(chunk, 1, string.format("size of %s (%s)",
-               "number", "bytes"), previdx)
+               "number", "bytes"), chunkinfo.previdx)
     -- initialize decoder (see the 5.0.2 script if you want to customize
     -- bit field sizes; Lua 5.1 has fixed instruction bit field sizes)
     DecodeInit(oconfig)
@@ -1313,7 +1367,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
         -- test integral flag (5.1)
         --
         CheckIntegral(size, idx, chunk, MoveToNextTok)
-        FormatLine(chunk, 1, "integral (1=integral)", previdx)
+        FormatLine(chunk, 1, "integral (1=integral)", chunkinfo.previdx)
 
         --
         -- verify or determine lua_Number type
@@ -1347,7 +1401,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
         --  config.endianness = endianness
         --end
         --
-        FormatLine(chunk, 8, "endianness bytes "..string.format("0x%x", endianness_value), previdx)
+        FormatLine(chunk, 8, "endianness bytes "..string.format("0x%x", endianness_value), chunkinfo.previdx)
       
         ---------------------------------------------------------------
         -- test endianness
@@ -1362,11 +1416,11 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
         local float_format_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
         print("float bytes "..float_format_bytes)
         local float_format_value = convert_from_double(float_format_bytes)
-        FormatLine(chunk, 8, "float format "..float_format_value, previdx)
+        FormatLine(chunk, 8, "float format "..float_format_value, chunkinfo.previdx)
       
         IsChunkSizeOk(1, idx, size, "global closure nupvalues")
-        local global_closure_nupvalues = LoadByte(chunk, idx, MoveToNextTok)
-        FormatLine(chunk, 1, "global closure nupvalues "..global_closure_nupvalues, previdx)
+        local global_closure_nupvalues = LoadByte(chunk, chunkinfo)
+        FormatLine(chunk, 1, "global closure nupvalues "..global_closure_nupvalues, chunkinfo.previdx)
   
         -- end of global header
         stat.header = idx - 1
