@@ -733,8 +733,8 @@ local function LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, fu
     ix = idx + GetLuaIntSize()  + 0
     print("Loading "..n.." constants")
     for i = 1, n do
-        chunkinfo.idx = idx
-        chunkinfo.previdx = previdx
+        chunkinfo.idx = ix 
+        chunkinfo.previdx = pidx
         local t = LoadByte(chunk, chunkinfo)
         idx = chunkinfo.idx
         previdx = chunkinfo.previdx
@@ -745,7 +745,7 @@ local function LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, fu
             print("Got Number")
             desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
-            print("Got boolean")
+            print("Got boolean at idx ".. (string.format("%x", idx)).."  c.i : "..string.format("%x", chunkinfo.idx))
             chunkinfo.idx = idx
             chunkinfo.previdx = previdx
             local b = LoadByte(chunk, chunkinfo)
@@ -755,15 +755,15 @@ local function LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, fu
             desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string at "..string.format("%x", idx))
-            ix = ix - 1  -- FIXME 5.3
-            pidx = pidx - 1  -- FIXME 5.3
-            chunkinfo.idx = idx
-            chunkinfo.previdx = previdx
+            --ix = ix  -- FIXME 5.3
+            --pidx = pidx  -- FIXME 5.3
+            chunkinfo.idx = ix
+            chunkinfo.previdx = pidx
             desc.k[i], strsize = LoadLua53String(chunk, chunkinfo)
             idx = chunkinfo.idx
             previdx = chunkinfo.previdx
-            ix = ix + strsize + 1
-            pidx = pidx + strsize + 1
+            ix = chunkinfo.idx -1 
+            pidx = chunkinfo.previdx -1
         elseif t == GetTypeNIL() then
             print("NIL")
             desc.k[i] = nil
@@ -1213,10 +1213,12 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     Hexdump(string.sub(chunk, idx, idx+32))
 
     nc  = LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
-    idx = idx + nc -- FIXME 
-    previdx = previdx + nc -- FIXME
-    chunkinfo.idx = idx
-    chunkinfo.previdx = previdx
+    --idx = chunkinfo.idx + nc -- FIXME 
+    --previdx = chunkinfo.previdx + nc -- FIXME
+    --chunkinfo.idx = idx
+    --chunkinfo.previdx = previdx
+    chunkinfo.idx = chunkinfo.idx+ 3
+    chunkinfo.previdx = chunkinfo.previdx + 3
     Load53Upvalues(chunk, chunkinfo, desc, MoveIdxLen)   SetStat("upvalues")
     idx = chunkinfo.idx
     previdx = chunkinfo.previdx
