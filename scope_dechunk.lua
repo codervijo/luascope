@@ -536,7 +536,7 @@ local function LoadLua53String(chunk, chunkinfo)
     --idx = idx + len - 1
     --func_moveidx(len)
     chunkinfo.idx = chunkinfo.idx + len
-    print("Loaded string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
+    print("Loaded string at idx "..string.format("%x", chunkinfo.idx).. " of length "..len .. ">"..s.."<")
     return s, len, islngstr
 end
 
@@ -723,47 +723,39 @@ end
 --
 -- load constants information (data)
 --
-local function LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, func_movetonext, func_moveidx, desc)
-    local n = LoadInt(chunk, total_size, idx, func_movetonext)
-    desc.pos_ks = previdx
-    desc.k = {}
-    desc.sizek = n
-    desc.posk = {}
-    pidx = idx
-    ix = idx + GetLuaIntSize()  + 0
+local function LoadConstantsLua53(chunk, chunkinfo, func_movetonext, func_moveidx, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, size, idx, func_movetonext)
+
+    desc.pos_ks   = previdx
+    desc.k        = {}
+    desc.sizek    = n
+    desc.posk     = {}
+    pidx          = idx
+    ix            = idx + GetLuaIntSize()  + 0
+    chunkinfo.idx = ix
     print("Loading "..n.." constants")
     for i = 1, n do
-        chunkinfo.idx = ix 
-        chunkinfo.previdx = pidx
+        print("reading byte at "..string.format("%x", chunkinfo.idx))
         local t = LoadByte(chunk, chunkinfo)
-        idx = chunkinfo.idx
-        previdx = chunkinfo.previdx
         pidx = pidx + 1
         ix = ix + 1
         desc.posk[i] = pidx
         if t == GetTypeNumber() then
             print("Got Number")
-            desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
+            desc.k[i] = LoadNumber(chunk, size, ix, func_movetonext)
         elseif t == GetTypeBoolean() then
             print("Got boolean at idx ".. (string.format("%x", idx)).."  c.i : "..string.format("%x", chunkinfo.idx))
-            chunkinfo.idx = idx
-            chunkinfo.previdx = previdx
             local b = LoadByte(chunk, chunkinfo)
-            idx = chunkinfo.idx
-            previdx = chunkinfo.previdx
             if b == 0 then b = false else b = true end
             desc.k[i] = b
         elseif t == GetTypeString() then
             print("Got string at "..string.format("%x", idx))
-            --ix = ix  -- FIXME 5.3
-            --pidx = pidx  -- FIXME 5.3
-            chunkinfo.idx = ix
-            chunkinfo.previdx = pidx
             desc.k[i], strsize = LoadLua53String(chunk, chunkinfo)
-            idx = chunkinfo.idx
-            previdx = chunkinfo.previdx
-            ix = chunkinfo.idx -1 
-            pidx = chunkinfo.previdx -1
+            chunkinfo.idx = chunkinfo.idx -1 
+            chunkinfo.previdx = chunkinfo.previdx -1
         elseif t == GetTypeNIL() then
             print("NIL")
             desc.k[i] = nil
@@ -1212,13 +1204,13 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     print("idx "..string.format("%x", idx))
     Hexdump(string.sub(chunk, idx, idx+32))
 
-    nc  = LoadConstantsLua53(chunk, chunkinfo, total_size, idx, previdx, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
+    nc  = LoadConstantsLua53(chunk, chunkinfo, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
     --idx = chunkinfo.idx + nc -- FIXME 
     --previdx = chunkinfo.previdx + nc -- FIXME
     --chunkinfo.idx = idx
     --chunkinfo.previdx = previdx
-    chunkinfo.idx = chunkinfo.idx+ 3
-    chunkinfo.previdx = chunkinfo.previdx + 3
+    chunkinfo.idx = chunkinfo.idx+ 3 -- FIXME
+    chunkinfo.previdx = chunkinfo.previdx + 3 -- FIXME
     Load53Upvalues(chunk, chunkinfo, desc, MoveIdxLen)   SetStat("upvalues")
     idx = chunkinfo.idx
     previdx = chunkinfo.previdx
