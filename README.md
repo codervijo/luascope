@@ -24,6 +24,9 @@ This was tested only on Ubuntu, but should work on any Unix-based system.
 2. Make sure docker is installed
 3. Run ```./lua53dock.sh``` to run luascope with Lua-5.3
 
+If you do not have docker for any reason, do the following instead of 3 steps above:
+```lua ./scope.lua```
+
 # How to use luascope
 ```
 $ ./lua53dock.sh 
@@ -39,3 +42,4 @@ Pos   Hex Data   Description or Code
 0005  00                 format (0=official)
 ...
 ....
+```
