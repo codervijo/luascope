@@ -363,7 +363,7 @@ end
 --
 local function LoadByte(chunk, chunkinfo)
     chunkinfo.previdx = chunkinfo.idx
-    chunkinfo.idx =  chunkinfo.idx + 1
+    chunkinfo.idx     =  chunkinfo.idx + 1
     return string.byte(chunk, chunkinfo.previdx)
 end
 
@@ -375,12 +375,15 @@ end
 -- loads a block of endian-sensitive bytes
 -- * rest of code assumes little-endian by default
 --
-local function LoadBlock(size, chunk, total_size, idx, func_movetonext)
-    print("LoadBlock Checking for size "..size.." total size "..total_size.." Idx starts at "..string.format("%x", idx))
+local function LoadBlock(size, chunk, chunkinfo)
+    local total_size = chunkinfo.chunk_size
+    local idx        = chunkinfo.idx
+    local previdx    = chunkinfo.previdx
+
+    print("LoadBlock Checking for size "..size.."  size "..total_size.." Idx starts at "..string.format("%x", idx))
     if not pcall(IsChunkSizeOk, size, idx, total_size, "LoadBlock") then return end
-    if func_movetonext ~= nil then
-        func_movetonext(size)
-    end
+    chunkinfo.previdx = chunkinfo.idx
+    chunkinfo.idx     = chunkinfo.idx + size
     local b = string.sub(chunk, idx, idx + size - 1)
     if GetLuaEndianness() == 1 then
         return b
@@ -392,8 +395,11 @@ end
 --
 -- loads a number (can be zero) - loadInt can't load zero - used by 5.2
 --
-local function LoadNo(chunk, total_size, idx, func_movetonext)
-    local x = LoadBlock(GetLuaIntSize(), chunk, total_size, idx, func_movetonext)
+local function LoadNo(chunk, chunkinfo)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local x       = LoadBlock(GetLuaIntSize(), chunk, chunkinfo)
 
     if x == nil then return 0 end
     local sum = 0
@@ -411,12 +417,7 @@ local function LoadInt(chunk, chunkinfo)
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
 
-    local function MoveToNextTok(size)
-        chunkinfo.previdx = chunkinfo.idx
-        chunkinfo.idx = chunkinfo.idx + size
-    end
-
-    local x = LoadBlock(GetLuaIntSize(), chunk, size, idx, MoveToNextTok)
+    local x = LoadBlock(GetLuaIntSize(), chunk, chunkinfo)
     if not x then
         error("could not load integer")
     else
@@ -437,8 +438,12 @@ end
 --
 -- loads a size_t (assume unsigned)
 --
-local function LoadSize(chunk, total_size, idx, func_movetonext)
-    local x = LoadBlock(GetLuaSizetSize(), chunk, total_size, idx, func_movetonext)
+local function LoadSize(chunk, chunkinfo)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local x       = LoadBlock(GetLuaSizetSize(), chunk, chunkinfo)
+
     if not x then
         print("total_size was ", total_size)
         error("could not load size_t at "..string.format("%x", idx)) --handled in LoadString()
@@ -455,8 +460,12 @@ end
 --
 -- loads a number (lua_Number type)
 --
-local function LoadNumber(chunk, total_size, idx, func_movetonext)
-    local x = LoadBlock(GetLuaNumberSize(), chunk, total_size, idx, func_movetonext)
+local function LoadNumber(chunk, chunkinfo)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+
+    local x = LoadBlock(GetLuaNumberSize(), chunk, chunkinfo)
     if not x then
         error("could not load lua_Number")
     else
@@ -471,9 +480,13 @@ end
 --
 -- load a string (size, data pairs)
 --
-local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+local function LoadString(chunk, chunkinfo)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+
     print("Trying to load string at idx "..string.format("%x", idx).." from total size "..total_size)
-    local len = LoadSize(chunk, total_size, idx, func_movetonext)
+    local len = LoadSize(chunk, chunkinfo)
     if not len then
         error("could not load String")
     else
@@ -486,7 +499,7 @@ local function LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
         IsChunkSizeOk(len, idx, total_size, "LoadString")
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len )
-        func_moveidx(len)
+        chunkinfo.idx = chunkinfo.idx + len
         print("Loading string at idx "..string.format("%x", idx).. " of length "..len .. ">"..s.."<")
         Hexdump(s)
         return s
@@ -552,8 +565,12 @@ end
 --
 -- load line information
 --
-local function LoadLines(chunk, total_size, idx, previdx, func_movetonext, desc, chunkinfo)
-    local size = LoadInt(chunk, chunkinfo)
+local function LoadLines(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local size    = LoadInt(chunk, chunkinfo)
+
     desc.pos_lineinfo = previdx
     print("VCVCVC Loading lines "..previdx..desc.pos_lineinfo)
     desc.lineinfo = {}
@@ -566,14 +583,18 @@ end
 --
 -- load locals information
 --
-local function LoadLocals(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx, chunkinfo)
-    local n = LoadInt(chunk, chunkinfo)
+local function LoadLocals(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, chunkinfo)
+
     desc.pos_locvars = previdx
     desc.locvars = {}
     desc.sizelocvars = n
     for i = 1, n do
         local locvar = {}
-        locvar.varname = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        locvar.varname = LoadString(chunk, chunkinfo)
         locvar.pos_varname = previdx
         locvar.startpc = LoadInt(chunk, chunkinfo)
         locvar.pos_startpc = previdx
@@ -586,8 +607,11 @@ end
 --
 -- load function prototypes information (Used in 5.2)
 --
-local function LoadFuncProto(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx)
-    local n = LoadNo(chunk, total_size, idx, func_movetonext)
+local function LoadFuncProto(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadNo(chunk, chunkinfo)
     --if n > 1 then
         --error(string.format("bad Function prototypes: read %d, expected %d", n, func.nups))
         --return
@@ -609,14 +633,17 @@ end
 --
 -- load upvalues information
 --
-local function Load52Upvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx, chunkinfo)
-    local n = LoadInt(chunk, chunkinfo)
+local function Load52Upvalues(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, chunkinfo)
     print("No of Upvalues", n)
     desc.pos_upvalues = previdx
     desc.upvalues = {}
     desc.sizeupvalues = n
     desc.posupvalues = {}
-    local x = LoadBlock(2, chunk, total_size, idx, func_movetonext)
+    local x = LoadBlock(2, chunk, chunkinfo)
     local y = 0
     for i = 2, 1, -1 do
         y = y * 256 + string.byte(x, i)
@@ -652,8 +679,11 @@ end
 --
 -- load upvalues information
 --
-local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, desc, func_moveidx, chunkinfo)
-    local n = LoadInt(chunk, chunkinfo)
+local function LoadUpvalues(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local n       = LoadInt(chunk, chunkinfo)
     if n ~= 0 and n~= desc.nups then
         error(string.format("bad nupvalues: read %d, expected %d", n, desc.nups))
         return
@@ -663,7 +693,7 @@ local function LoadUpvalues(chunk, total_size, idx, previdx, func_movetonext, de
     desc.sizeupvalues = n
     desc.posdescupvalues = {}
     for i = 1, n do
-        desc.upvalues[i] = LoadString(chunk, total_size, idx, func_movetonext, func_moveidx)
+        desc.upvalues[i] = LoadString(chunk, chunkinfo)
         desc.posupvalues[i] = previdx
         if not desc.upvalues[i] then
             error("empty string at index "..(i - 1).."in upvalue table")
@@ -674,17 +704,18 @@ end
 --
 -- load function code
 --
-local function LoadCode(chunk, total_size, idx, previdx, func_movetonext, desc, chunkinfo)
-    local size = LoadInt(chunk, chunkinfo)
-    idx = chunkinfo.idx
+local function LoadCode(chunk, chunkinfo, desc)
+    local size    = chunkinfo.chunk_size
+    local idx     = chunkinfo.idx
+    local previdx = chunkinfo.previdx
+    local size    = LoadInt(chunk, chunkinfo)
+
     print("Loading instructions of Size "..size.." hex:" ..string.format("%x", size).." at idx "..string.format("%x", idx))
     desc.pos_code = previdx
     desc.code = {}
     desc.sizecode = size
     for i = 1, size do
-        desc.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, total_size, idx, func_movetonext)
-        chunkinfo.previdx = chunkinfo.idx
-        chunkinfo.idx = chunkinfo.idx + 4 --XXX HACK, remove it after loadblock does chunkinfo
+        desc.code[i] = LoadBlock(GetLuaInstructionSize(), chunk, chunkinfo)
     end
 end
 
@@ -735,7 +766,7 @@ end
 --
 -- load constants information (data)
 --
-local function LoadConstantsLua53(chunk, chunkinfo, func_movetonext, func_moveidx, desc)
+local function LoadConstantsLua53(chunk, chunkinfo, desc)
     local size    = chunkinfo.chunk_size
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
@@ -1128,15 +1159,6 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
 
-    local function MoveToNextTok(size)
-        previdx = idx
-        idx = idx + size
-    end
-
-    local function MoveIdxLen(len)
-        idx = idx + len
-    end
-
     local function CheckLuaSignature(size, idx, chunk)
         local lua53signature = "\x19\x93\x0d\x0a\x1a\x0a"
 
@@ -1154,32 +1176,27 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
     -- statistics handler
-    local start       = idx
+    local start       = chunkinfo.idx
     desc.stat         = {}
     desc.stat.funcs   = 0
     desc.stat.locvars = {}
-    local function SetStat(item)
-        desc.stat[item] = idx - start
-        start = idx
+    local function SetStat(item, chunkinfo)
+        desc.stat[item] = chunkinfo.idx - start
+        start = chunkinfo.idx
     end
-    print("Loading string at "..string.format("%x", idx).." 0x"..string.format("%x", idx))
+    print("Loading string at "..string.format("%x", chunkinfo.idx).." 0x"..string.format("%x", chunkinfo.idx))
     Hexdump(chunk)
 
     --idx = CheckLuaSignature(total_size, idx, chunk)
     local str = {}
-    idx  = idx + 6 -- FIXME
-    chunkinfo.idx = chunkinfo.idx + 6 -- TODO
-    chunkinfo.previdx = chunkinfo.previdx + 6
-    chunkinfo.previdx = idx
-    previdx = idx
+
+    chunkinfo.idx = chunkinfo.idx + 1
     --desc.source 
-    print("idx: "..string.format("%x", idx).." previdx: "..previdx)
+    print("idx: "..string.format("%x", chunkinfo.idx).." previdx: "..chunkinfo.previdx)
     str.val, str.len, str.islong= LoadLua53String(chunk, chunkinfo)
     print("Source code: ", str.val, str.len)
-    idx = chunkinfo.idx
-    previdx = chunkinfo.previdx
     desc.pos_source = chunkinfo.previdx
-    print("idx: "..string.format("%x", idx).." previdx: "..previdx)
+    print("idx: "..string.format("%x", chunkinfo.idx).." previdx: "..chunkinfo.previdx)
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, chunkinfo)
@@ -1192,64 +1209,52 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -------------------------------------------------------------
     -- some byte counts
     -------------------------------------------------------------
-    idx = chunkinfo.idx
     if IsChunkSizeOk(4, idx, total_size, "function header") then return end
     desc.numparams    = LoadByte(chunk, chunkinfo)
     desc.is_vararg    = LoadByte(chunk, chunkinfo)
     desc.maxstacksize = LoadByte(chunk, chunkinfo)
-    SetStat("header")
-    --idx = chunkinfo.idx - 1 -- FIXME
+    SetStat("header", chunkinfo)
+    chunkinfo.idx = chunkinfo.idx - 1 -- FIXME
     print("Num params :"..desc.numparams)
     print("Max stack size :"..desc.maxstacksize.." idx "..string.format("%x", chunkinfo.idx))
     print "3"
 
-    -- load parts of a chunk
-    --previdx = chunkinfo.previdx - 1 --FIXME
-    idx = chunkinfo.idx - 1
-    previdx = chunkinfo.previdx -1
-    chunkinfo.idx  = idx
-    chunkinfo.previdx = previdx
-
-    LoadCode(chunk, total_size, idx, previdx, MoveToNextTok, desc, chunkinfo)                   SetStat("code")
+    LoadCode(chunk, chunkinfo, desc)                 SetStat("code", chunkinfo)
     print "3.4"
     print("idx "..string.format("%x", chunkinfo.idx))
 
-    nc  = LoadConstantsLua53(chunk, chunkinfo, MoveToNextTok, MoveIdxLen, desc) SetStat("consts")
-    Load53Upvalues(chunk, chunkinfo, desc)   SetStat("upvalues")
+    nc  = LoadConstantsLua53(chunk, chunkinfo, desc) SetStat("consts", chunkinfo)
+    Load53Upvalues(chunk, chunkinfo, desc)           SetStat("upvalues", chunkinfo)
     idx = chunkinfo.idx + 3 -- FIXME
     previdx = chunkinfo.previdx + 3 -- FIXME
-    LoadFuncProto(chunk, total_size, idx, previdx, MoveToNextTok, desc, MoveIdxLen) SetStat("proto")
-    SetStat("funcs")
+    LoadFuncProto(chunk, chunkinfo, desc) SetStat("proto", chunkinfo)
+    SetStat("funcs", chunkinfo)
 
-    chunkinfo.idx = idx
-    chunkinfo.previdx = previdx
     local n = LoadInt(chunk, chunkinfo)
-    idx = chunkinfo.idx
-    previdx = chunkinfo.previdx
     print("No of Line Numbers:", n)
     desc.lineinfo = {}
     if n ~= 0 then
         for i = 1, n do
-            local j = LoadNo(chunk, total_size, idx, MoveToNextTok)
+            local j = LoadNo(chunk, chunkinfo)
             print("\t Line number:", j)
             desc.lineinfo[i] = j
         end
     end
     desc.pos_lineinfo = previdx
     desc.sizelineinfo = n
-    SetStat("lines")
+    SetStat("lines", chunkinfo)
 
-    local k = LoadNo(chunk, total_size, idx, MoveToNextTok)
+    local k = LoadNo(chunk, chunkinfo)
     desc.pos_locvars = previdx
     desc.locvars = {}
     desc.sizelocvars = k
     print("No of Local variables:", k)
     if k ~= 0 then
         for i = 1, k do
-            lvars = LoadString(chunk, total_size, idx, MoveToNextTok, MoveIdxLen)
+            lvars = LoadString(chunk, chunkinfo)
         end
     end
-    SetStat("locals")
+    SetStat("locals", chunkinfo)
 
     Hexdump(string.sub(chunk, idx, idx+32))
     --local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
@@ -1283,15 +1288,6 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     local idx       = chunkinfo.idx
     local previdx   = chunkinfo.previdx
 
-    local function MoveToNextTok(size)
-        previdx = idx
-        idx = idx + size
-    end
-
-    local function MoveIdxLen(len)
-        idx = idx + len
-    end
-
     --
     -- initialize listing display
     --
@@ -1302,7 +1298,6 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     --
     len = dechunker.Func_CheckSignature(chunk, chunkinfo, oconfig)
     FormatLine(chunk, len, "header signature: "..EscapeString(config.SIGNATURE, 1), idx)
-    idx = chunkinfo.idx
 
     --
     -- test version
@@ -1323,9 +1318,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
         local cfg_LUAC_DATA = "\25\147\r\n\26\n"
         local len = string.len(cfg_LUAC_DATA)
         print("Length of LUAC_DATA is ",len)
-        idx = chunkinfo.idx
-        local LUAC_DATA = LoadBlock(len, chunk, size, chunkinfo.idx, MoveToNextTok)
-        chunkinfo.idx   = idx
+        local LUAC_DATA = LoadBlock(len, chunk, chunkinfo)
         --print("Read Luac_data as", LUAC_DATA)
         if LUAC_DATA ~= cfg_LUAC_DATA then
             error("header LUAC_DATA not found, this is not a Lua chunk")
@@ -1391,7 +1384,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
             error("could not find conversion function for int")
         end
         IsChunkSizeOk(8, idx, size, "endianness bytes")
-        local endianness_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
+        local endianness_bytes = LoadBlock(8, chunk, chunkinfo)
         local endianness_value = convert_from_int(endianness_bytes, 8)
         --MoveToNextTok(size)
         --
@@ -1415,7 +1408,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
         end
         print("Total Size"..size.."Current index"..string.format("%x", idx))
         IsChunkSizeOk(8, idx, size, "float format bytes")
-        local float_format_bytes = LoadBlock(8, chunk, size, idx, MoveToNextTok)
+        local float_format_bytes = LoadBlock(8, chunk, chunkinfo)
         print("float bytes "..float_format_bytes)
         local float_format_value = convert_from_double(float_format_bytes)
         FormatLine(chunk, 8, "float format "..float_format_value, chunkinfo.previdx)
@@ -1439,7 +1432,7 @@ function LuaChunkHeader(dechunker, chunk, chunkinfo, oconfig)
     DisplayStat("* global header = "..stat.header.." bytes", oconfig)
     DescLine("** global header end **")
 
-    return idx, previdx, chunkdets
+    return chunkinfo.idx, chunkinfo.previdx, chunkdets
 end
 
 local LuaDechunker   = {}
