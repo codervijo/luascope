@@ -485,7 +485,7 @@ local function LoadString(chunk, chunkinfo)
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
 
-    print("Trying to load string at idx "..string.format("%x", idx).." from total size "..total_size)
+    print("Trying to load string at idx "..string.format("%x", idx).." from total size "..size)
     local len = LoadSize(chunk, chunkinfo)
     if not len then
         error("could not load String")
@@ -496,7 +496,7 @@ local function LoadString(chunk, chunkinfo)
         end
         print("Size in string: "..len.." "..string.format("%x", len))
         idx = idx + GetLuaSizetSize() -- idx was incremented in our caller
-        IsChunkSizeOk(len, idx, total_size, "LoadString")
+        IsChunkSizeOk(len, idx, size, "LoadString")
         -- note that ending NUL is removed
         local s = string.sub(chunk, idx, idx + len )
         chunkinfo.idx = chunkinfo.idx + len
@@ -638,6 +638,7 @@ local function Load52Upvalues(chunk, chunkinfo, desc)
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
     local n       = LoadInt(chunk, chunkinfo)
+
     print("No of Upvalues", n)
     desc.pos_upvalues = previdx
     desc.upvalues = {}
@@ -661,10 +662,10 @@ local function Load53Upvalues(chunk, chunkinfo, desc)
     local n       = LoadInt(chunk, chunkinfo)
 
     print("No of Upvalues", n)
-    desc.pos_upvalues = previdx
-    desc.upvalues = {}
+    desc.pos_upvalues = chunkinfo.previdx
+    desc.upvalues     = {}
     desc.sizeupvalues = n
-    desc.posupvalues = {}
+    desc.posupvalues  = {}
     for i = 1, n do
         local upvalue = {}
         upvalue.instack = LoadByte(chunk, chunkinfo)
@@ -684,6 +685,7 @@ local function LoadUpvalues(chunk, chunkinfo, desc)
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
     local n       = LoadInt(chunk, chunkinfo)
+
     if n ~= 0 and n~= desc.nups then
         error(string.format("bad nupvalues: read %d, expected %d", n, desc.nups))
         return
@@ -1225,8 +1227,8 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
 
     nc  = LoadConstantsLua53(chunk, chunkinfo, desc) SetStat("consts", chunkinfo)
     Load53Upvalues(chunk, chunkinfo, desc)           SetStat("upvalues", chunkinfo)
-    idx = chunkinfo.idx + 3 -- FIXME
-    previdx = chunkinfo.previdx + 3 -- FIXME
+    chunkinfo.idx = chunkinfo.idx + 4
+    chunkinfo.previdx = chunkinfo.previdx + 4
     LoadFuncProto(chunk, chunkinfo, desc) SetStat("proto", chunkinfo)
     SetStat("funcs", chunkinfo)
 
@@ -1240,12 +1242,12 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
             desc.lineinfo[i] = j
         end
     end
-    desc.pos_lineinfo = previdx
+    desc.pos_lineinfo = chunkinfo.previdx
     desc.sizelineinfo = n
     SetStat("lines", chunkinfo)
 
     local k = LoadNo(chunk, chunkinfo)
-    desc.pos_locvars = previdx
+    desc.pos_locvars = chunkinfo.previdx
     desc.locvars = {}
     desc.sizelocvars = k
     print("No of Local variables:", k)
@@ -1256,7 +1258,6 @@ function Load53Function(dechunker, chunk, chunkinfo, funcname, num, level)
     end
     SetStat("locals", chunkinfo)
 
-    Hexdump(string.sub(chunk, idx, idx+32))
     --local start = LoadNo(chunk, total_size, idx, MoveToNextTok)
     --print("Goes into scope at instruction:", start)
     --local stop = LoadNo(chunk, total_size, idx, MoveToNextTok)
