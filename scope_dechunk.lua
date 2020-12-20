@@ -324,7 +324,7 @@ function DescFunction(chunk, desc, num, level, oconfig)
         DescConstantPs(chunk, desc)
         DescCode(chunk, desc, oconfig)
     else
-        DescCode(chunk, desc, oconfig)        -- normal displays positional order
+        --DescCode(chunk, desc, oconfig)        -- normal displays positional order
         DescConstantKs(chunk, desc)
         DescConstantPs(chunk, desc)
         DescLines(chunk,desc)

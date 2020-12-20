@@ -376,7 +376,7 @@ function DescribeInst(inst, pos, func, oconfig)
 	elseif inst.OP == 36 then -- CLOSURE A Bx
 		Operand = OperandABx(inst)
 		-- lets user know how many following instructions are significant
-		Comment = func.p[inst.Bx + 1].nups.." upvalues"
+		-- FIXME Comment = func.p[inst.Bx + 1].nups.." upvalues"
 	--
 	elseif inst.OP == 37 then -- VARARG A B
 		Operand = OperandAB(inst)
