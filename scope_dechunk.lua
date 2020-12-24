@@ -1063,7 +1063,7 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, chunkinfo)
     print("Pos :".. desc.linedefined)
-    desc.pos_linedefined = previdx
+    desc.pos_linedefined = chunkinfo.previdx
     desc.lastlinedefined = LoadInt(chunk, chunkinfo)
     print("Last line :"..desc.lastlinedefined)
     print "1"
@@ -1098,7 +1098,7 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     --LoadDebug(chunk, total_size, idx, previdx, MoveToNextTok, func, MoveIdxLen)
     desc.source = LoadString(chunk, chunkinfo)
     print("Source code: ", desc.source)
-    desc.pos_source = previdx
+    desc.pos_source = chunkinfo.previdx
   
     local n = LoadInt(chunk, chunkinfo)
     print("No of Line Numbers:", n)
@@ -1110,12 +1110,12 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
             desc.lineinfo[i] = j
         end
     end
-    desc.pos_lineinfo = previdx
+    desc.pos_lineinfo = chunkinfo.previdx
     desc.sizelineinfo = n
     SetStat("lines")
 
     local k = LoadNo(chunk, chunkinfo)
-    desc.pos_locvars = previdx
+    desc.pos_locvars = chunkinfo.previdx
     desc.locvars     = {}
     desc.sizelocvars = k
     print("No of Local variables:", k)
