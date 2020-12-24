@@ -820,7 +820,7 @@ local function LoadConstantPs(chunk, chunkinfo, desc)
     local idx     = chunkinfo.idx
     local previdx = chunkinfo.previdx
     local n       = LoadInt(chunk, chunkinfo)
-    
+
     desc.pos_ps = previdx
     desc.p = {}
     desc.sizep = n
@@ -977,15 +977,6 @@ function Load51Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
 
-    local function MoveToNextTok(size)
-        previdx = idx
-        idx = idx + size
-    end
-
-    local function MoveIdxLen(len)
-        idx = idx + len
-    end
-
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
     -------------------------------------------------------------
@@ -1053,15 +1044,6 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     local idx        = chunkinfo.idx
     local previdx    = chunkinfo.previdx
     local total_size = chunkinfo.chunk_size
-
-    local function MoveToNextTok(size)
-        previdx = idx
-        idx = idx + size
-    end
-
-    local function MoveIdxLen(len)
-        idx = idx + len
-    end
 
     -------------------------------------------------------------
     -- body of LoadFunction() starts here
