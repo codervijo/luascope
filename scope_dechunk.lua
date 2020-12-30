@@ -739,9 +739,7 @@ local function LoadConstantKs(chunk, chunkinfo, desc)
     print("Loading "..n.." constants")
     for i = 1, n do
         local t = LoadByte(chunk, chunkinfo)
-        pidx = pidx + 1
-        ix = ix + 1
-        desc.posk[i] = pidx
+        desc.posk[i] = chunkinfo.previdx
         if t == GetTypeNumber() then
             print("Got Number")
             desc.k[i] = LoadNumber(chunk, total_size, ix, func_movetonext)
@@ -760,7 +758,7 @@ local function LoadConstantKs(chunk, chunkinfo, desc)
             print("NIL")
             desc.k[i] = nil
         else
-            error(i.." bad constant type "..t.." at "..previdx)
+            error(i.." bad constant type "..t.." at "..chunkinfo.previdx)
         end
     end--for
 end
@@ -1058,7 +1056,7 @@ function Load52Function(dechunker, chunk, chunkinfo, funcname, num, level)
     print("Loading string at "..string.format("%x", idx))
     Hexdump(chunk)
     previdx = idx
-    idx = dechunker.Func_CheckSignature(total_size, idx, chunk)
+    chunkinfo.idx = dechunker.Func_CheckSignature(total_size, idx, chunk)
 
     -- line where the function was defined
     desc.linedefined = LoadInt(chunk, chunkinfo)
